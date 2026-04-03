@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Julia
+Manifest.toml
+# ※Project.toml は含めてください（Pkg.instantiate()に必要）
+
+# Data & Temporary files
+*.json
+*.log
+.DS_Store
+
+# Cursor/VS Code
+.vscode/
+.cursor/
