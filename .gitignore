@@ -1,17 +1,14 @@
-# Python
-.venv/
+# Python Environments & Cache
 __pycache__/
 *.pyc
+.venv/
+venv/
+env/
 
-# Julia
-Manifest.toml
-# ※Project.toml は含めてください（Pkg.instantiate()に必要）
-
-# Data & Temporary files
+# Generated Data Files
+# （Juliaスクリプト実行時に生成されるためリポジトリには含めない）
 *.json
-*.log
-.DS_Store
 
-# Cursor/VS Code
-.vscode/
-.cursor/
+# OS generated files
+.DS_Store
+Thumbs.db
