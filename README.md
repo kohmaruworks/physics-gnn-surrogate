@@ -140,6 +140,26 @@ Phase 1 で示した「構造なしモデル対グラフ」の対比を発展さ
 3. **オプションの往復（JSON ブリッジ）**  
    `compare_loss_visualization.py` は **Catlab 由来の位相**（`graph_from_catlab.json`）と PyG 用ローダを前提にしています。生成 JSON は `.gitignore` で除外されており、現リビジョンではローダは同梱されていません。資産を復元・用意した場合の**拡張トラック**として位置づけられます：Julia のインシデンス構造 → JSON → `Data` → 学習。
 
+```mermaid
+flowchart LR
+  subgraph Julia["Julia (ACT / dynamics)"]
+    C[Catlab.Graphs / ACSets]
+    D[DifferentialEquations.jl]
+    J[JSON3.jl]
+  end
+  subgraph Python["Python (PyG)"]
+    H[HeteroData + HeteroConv]
+    G[Homogeneous GCN baseline]
+    T[Training & visualization]
+  end
+  C --> H
+  C -. optional JSON .-> J
+  J -. optional .-> T
+  D -. future coupling .-> T
+  G --> T
+  H --> T
+```
+
 ### ファイル構成
 
 | パス | 説明 |
