@@ -1,15 +1,14 @@
 """
-Catlab 由来のグラフ上で、圏論構造を使う GNN と構造を無視する MLP の
-汎化性能（テスト損失）を公平な条件下で比較する。
+基礎編 第3回（train_spring_mass_gcn.py）と同じ学習条件のもと、
+2 層 GCN（グラフを利用）と平坦化 MLP（構造を無視）の学習損失を比較する。
 
-正解ラベルはバネ–質量系のフックの法則に基づく合力から、
-オイラー積分で得た次ステップの状態 [位置, 速度] とする（辺の重複は 1 バネとして数える）。
-
-200 組の (x, y) を生成し 150 Train / 50 Test に分割。
-学習は Train のみ。グラフには毎エポックの Test MSE のみをプロットする。
-
-※ 本ターゲットは状態 x に対して線形写像になる。平坦化 MLP は十分な幅があれば
-   任意の線形写像に近づけやすく、重み共有する GCN は表現クラスが異なり学習曲線が違う。
+- データ: `physics-gnn-surrogate-basic/spring_mass_chain_5.json`（同一リポ内に無い場合は
+  親ディレクトリの sibling リポジトリを探索）
+- 教師 y: Julia 側で ODE 積分した終端状態（第3回と同じ JSON）
+- モデル: GCN — in=2, hidden=16, out=2（TwoLayerGCN 相当）
+- MLP — 2 隠れ層、隠れ幅 16、入出力 N*2
+- 最適化: Adam, lr=0.02, 100 エポック
+- 指標: 毎エポックの**訓練** MSE（1 グラフ・第3回と同じ手順の比較）
 """
 
 from __future__ import annotations
@@ -19,7 +18,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-from torch_geometric.data import Batch, Data
+import torch.nn.functional as F
+from torch_geometric.data import Data
 from torch_geometric.nn import GCNConv
 
 from import_catlab_json_to_pyg import catlab_json_to_data
@@ -69,23 +69,25 @@ def spring_mass_next_state(
     return torch.stack([u_new, v_new], dim=1)
 
 
-class CategoryInformedGNN(nn.Module):
-    """隠れ次元 hidden。2×GCN + 線形（MLP 側の 2 隠れ層と同じ段数の目安）。"""
+class TwoLayerGCN(nn.Module):
+    """第3回 `train_spring_mass_gcn.TwoLayerGCN` と同形: 2→16→2。"""
 
-    def __init__(self, in_channels: int, hidden: int, out_channels: int):
+    def __init__(
+        self, in_channels: int = 2, hidden_channels: int = 16, out_channels: int = 2
+    ):
         super().__init__()
-        self.conv1 = GCNConv(in_channels, hidden)
-        self.conv2 = GCNConv(hidden, hidden)
-        self.lin = nn.Linear(hidden, out_channels)
+        self.conv1 = GCNConv(in_channels, hidden_channels)
+        self.conv2 = GCNConv(hidden_channels, out_channels)
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
-        h = self.conv1(x, edge_index).relu()
-        h = self.conv2(h, edge_index).relu()
-        return self.lin(h)
+        x = self.conv1(x, edge_index)
+        x = F.relu(x)
+        x = self.conv2(x, edge_index)
+        return x
 
 
 class NaiveMLP(nn.Module):
-    """全ノード特徴を平坦化。2 隠れ層 + 出力（GNN と同じ hidden 次元）。"""
+    """全ノード特徴を平坦化。2 隠れ層、隠れ幅は GNN の 16 に合わせる。"""
 
     def __init__(self, num_nodes: int, feat_dim: int, hidden_dim: int):
         super().__init__()
@@ -115,194 +117,118 @@ class NaiveMLP(nn.Module):
         return flat_out.view(num_graphs * self.num_nodes, self.feat_dim)
 
 
-def build_fixed_dataset(
-    base: Data,
-    spring_pairs: list[tuple[int, int]],
-    *,
-    n_samples: int,
-    num_nodes: int,
-    feat_dim: int,
-    device: torch.device,
-    pos_scale: float,
-    vel_scale: float,
-    k_spring: float,
-    mass: float,
-    dt_phys: float,
-    generator: torch.Generator | None = None,
-) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
-    xs: list[torch.Tensor] = []
-    ys: list[torch.Tensor] = []
-    for _ in range(n_samples):
-        x_s = torch.zeros(num_nodes, feat_dim, device=device)
-        x_s[:, 0] = torch.randn(num_nodes, device=device, generator=generator) * pos_scale
-        x_s[:, 1] = torch.randn(num_nodes, device=device, generator=generator) * vel_scale
-        y_s = spring_mass_next_state(
-            x_s, spring_pairs, k=k_spring, m=mass, dt=dt_phys
-        )
-        xs.append(x_s)
-        ys.append(y_s)
-    return xs, ys
-
-
-def make_batch(
-    base: Data,
-    x_list: list[torch.Tensor],
-    y_list: list[torch.Tensor],
-) -> Batch:
-    data_list = []
-    for xa, ya in zip(x_list, y_list):
-        data_list.append(
-            Data(
-                x=xa,
-                y=ya,
-                edge_index=base.edge_index,
-                num_nodes=base.num_nodes,
-            )
-        )
-    return Batch.from_data_list(data_list)
-
-
-@torch.no_grad()
-def eval_mse(
-    model: nn.Module, batch: Batch, criterion: nn.Module, *, use_gnn: bool
-) -> float:
-    if use_gnn:
-        pred = model(batch.x, batch.edge_index)
-    else:
-        pred = model(batch.x, batch.batch)
-    return float(criterion(pred, batch.y).item())
+def resolve_spring_chain_json(repo: Path) -> Path:
+    """第3回と同じ `spring_mass_chain_5.json` を解決。"""
+    candidates = [
+        repo.parent / "physics-gnn-surrogate-basic" / "spring_mass_chain_5.json",
+        repo / "spring_mass_chain_5.json",
+    ]
+    for p in candidates:
+        if p.is_file():
+            return p
+    raise FileNotFoundError(
+        "第3回と同じ教師付き JSON が見つかりません: spring_mass_chain_5.json\n"
+        "次のいずれかに配置してください:\n"
+        f"  - {candidates[0]}\n"
+        f"  - {candidates[1]}\n"
+        "基礎編リポで `spring_mass_chain_export.jl` から生成できます。"
+    )
 
 
 def main() -> None:
     repo = Path(__file__).resolve().parent
-    json_path = repo / "graph_from_catlab.json"
-    base = catlab_json_to_data(json_path)
+    json_path = resolve_spring_chain_json(repo)
+    data = catlab_json_to_data(json_path)
+    if data.x is None or data.y is None:
+        raise ValueError("JSON に x, y（教師）が必要です。第2回のエクスポート手順を参照。")
 
-    num_nodes = int(base.num_nodes)
+    num_nodes = int(data.num_nodes)
     feat_dim = 2
-    edge_index = base.edge_index
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    edge_index = edge_index.to(device)
-    spring_pairs = undirected_spring_pairs(base.edge_index)
+    data = data.to(device)
+    x = data.x
+    y = data.y
+    edge_index = data.edge_index
 
-    torch.manual_seed(42)
-    dataset_seed = torch.Generator(device=device)
-    dataset_seed.manual_seed(42)
+    hidden = 16
+    lr = 0.02
+    n_epochs = 100
 
-    # 隠れ次元を両者で同一（パラメータ数はアーキテクチャのため一致しない）
-    hidden = 96
-
-    gnn = CategoryInformedGNN(feat_dim, hidden, feat_dim).to(device)
+    torch.manual_seed(7)
+    gnn = TwoLayerGCN(
+        in_channels=feat_dim, hidden_channels=hidden, out_channels=feat_dim
+    ).to(device)
     mlp = NaiveMLP(num_nodes, feat_dim, hidden).to(device)
 
-    lr = 1e-3
     opt_gnn = torch.optim.Adam(gnn.parameters(), lr=lr)
     opt_mlp = torch.optim.Adam(mlp.parameters(), lr=lr)
     criterion = nn.MSELoss()
 
-    epochs = 800
-    n_total = 200
-    n_train = 150
-    n_test = 50
-    pos_scale = 1.0
-    vel_scale = 0.5
-    k_spring, mass, dt_phys = 1.0, 1.0, 0.05
+    loss_gnn_hist: list[float] = []
+    loss_mlp_hist: list[float] = []
 
-    x_all, y_all = build_fixed_dataset(
-        base,
-        spring_pairs,
-        n_samples=n_total,
-        num_nodes=num_nodes,
-        feat_dim=feat_dim,
-        device=device,
-        pos_scale=pos_scale,
-        vel_scale=vel_scale,
-        k_spring=k_spring,
-        mass=mass,
-        dt_phys=dt_phys,
-        generator=dataset_seed,
+    print(
+        f"data: {json_path.name}  (same as Phase1 §3)\n"
+        f"device={device}  num_nodes={num_nodes}  "
+        f"TwoLayerGCN 2x{hidden}x2  MLP 2h/{hidden}  "
+        f"Adam lr={lr}  epochs={n_epochs}\n"
     )
 
-    split_gen = torch.Generator()
-    split_gen.manual_seed(42)
-    perm = torch.randperm(n_total, generator=split_gen).tolist()
-    train_idx = perm[:n_train]
-    test_idx = perm[n_train : n_train + n_test]
-
-    x_train = [x_all[i] for i in train_idx]
-    y_train = [y_all[i] for i in train_idx]
-    x_test = [x_all[i] for i in test_idx]
-    y_test = [y_all[i] for i in test_idx]
-
-    train_batch = make_batch(base, x_train, y_train).to(device)
-    test_batch = make_batch(base, x_test, y_test).to(device)
-
-    test_loss_gnn: list[float] = []
-    test_loss_mlp: list[float] = []
-
-    for ep in range(1, epochs + 1):
+    for epoch in range(1, n_epochs + 1):
         gnn.train()
         mlp.train()
-
-        opt_gnn.zero_grad()
-        loss_g_train = criterion(
-            gnn(train_batch.x, train_batch.edge_index), train_batch.y
-        )
-        loss_g_train.backward()
+        opt_gnn.zero_grad(set_to_none=True)
+        opt_mlp.zero_grad(set_to_none=True)
+        out_g = gnn(x, edge_index)
+        out_m = mlp(x, None)
+        loss_g = criterion(out_g, y)
+        loss_m = criterion(out_m, y)
+        loss_g.backward()
+        loss_m.backward()
         opt_gnn.step()
-
-        opt_mlp.zero_grad()
-        loss_m_train = criterion(mlp(train_batch.x, train_batch.batch), train_batch.y)
-        loss_m_train.backward()
         opt_mlp.step()
-
-        gnn.eval()
-        mlp.eval()
-        test_loss_gnn.append(eval_mse(gnn, test_batch, criterion, use_gnn=True))
-        test_loss_mlp.append(eval_mse(mlp, test_batch, criterion, use_gnn=False))
-
-        if ep % 20 == 0:
+        loss_gnn_hist.append(float(loss_g.item()))
+        loss_mlp_hist.append(float(loss_m.item()))
+        if epoch == 1 or epoch % 10 == 0 or epoch == n_epochs:
             print(
-                f"epoch {ep:4d}  GNN test={test_loss_gnn[-1]:.6f}  "
-                f"MLP test={test_loss_mlp[-1]:.6f}"
+                f"epoch {epoch:3d}  GNN train MSE={loss_gnn_hist[-1]:.6f}  "
+                f"MLP train MSE={loss_mlp_hist[-1]:.6f}"
             )
 
-    # 最終エポックのテスト MSE を表示
     print(
-        f"\n--- Final test MSE ---\n"
-        f"  Category-informed GNN : {test_loss_gnn[-1]:.6f}\n"
-        f"  Naive MLP             : {test_loss_mlp[-1]:.6f}"
+        f"\n--- Final training MSE (epoch {n_epochs}) ---\n"
+        f"  TwoLayerGCN: {loss_gnn_hist[-1]:.6f}\n"
+        f"  Naive MLP:   {loss_mlp_hist[-1]:.6f}"
     )
 
     fig, ax = plt.subplots(figsize=(8, 4.5), dpi=150)
-    epochs_axis = range(1, len(test_loss_gnn) + 1)
+    xs = range(1, n_epochs + 1)
     ax.plot(
-        epochs_axis,
-        test_loss_gnn,
+        xs,
+        loss_gnn_hist,
         color="#1565c0",
         linewidth=1.8,
         linestyle="-",
-        label="Category-informed GNN (test)",
+        label="TwoLayerGCN (train)",
     )
     ax.plot(
-        epochs_axis,
-        test_loss_mlp,
+        xs,
+        loss_mlp_hist,
         color="#c62828",
         linewidth=1.8,
         linestyle="--",
-        label="Naive MLP (test)",
+        label="Naive MLP (train)",
     )
     ax.set_title(
-        "Physics Surrogate: Test MSE — GNN vs Flattened MLP", fontsize=12
+        "GNN vs MLP — training MSE (Phase 1 §3 same: spring_mass_chain_5.json, lr=0.02, 100 ep)",
+        fontsize=11,
     )
     ax.set_xlabel("Epoch", fontsize=11)
-    ax.set_ylabel("Test MSE Loss", fontsize=11)
+    ax.set_ylabel("Training MSE Loss", fontsize=11)
     ax.legend(loc="upper right", fontsize=10)
     ax.grid(True, alpha=0.35, linestyle="--")
     fig.tight_layout()
 
-    # リポジトリ直下 + Zenn 記事用 images フォルダの両方に保存
     out_png = repo / "loss_comparison_test.png"
     fig.savefig(out_png, dpi=150, bbox_inches="tight")
 
