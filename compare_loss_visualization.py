@@ -268,35 +268,50 @@ def main() -> None:
                 f"MLP test={test_loss_mlp[-1]:.6f}"
             )
 
-    plt.style.use("dark_background")
-    fig, ax = plt.subplots(figsize=(10, 6), dpi=120)
+    # 最終エポックのテスト MSE を表示
+    print(
+        f"\n--- Final test MSE ---\n"
+        f"  Category-informed GNN : {test_loss_gnn[-1]:.6f}\n"
+        f"  Naive MLP             : {test_loss_mlp[-1]:.6f}"
+    )
+
+    fig, ax = plt.subplots(figsize=(8, 4.5), dpi=150)
     epochs_axis = range(1, len(test_loss_gnn) + 1)
     ax.plot(
         epochs_axis,
         test_loss_gnn,
-        color="#00ffcc",
-        linewidth=2.5,
+        color="#1565c0",
+        linewidth=1.8,
         linestyle="-",
         label="Category-informed GNN (test)",
     )
     ax.plot(
         epochs_axis,
         test_loss_mlp,
-        color="#ff4444",
-        linewidth=2.0,
-        linestyle=":",
+        color="#c62828",
+        linewidth=1.8,
+        linestyle="--",
         label="Naive MLP (test)",
     )
     ax.set_title(
-        "Physics Surrogate: Test Loss — Generalization Comparison", fontsize=14
+        "Physics Surrogate: Test MSE — GNN vs Flattened MLP", fontsize=12
     )
-    ax.set_xlabel("Epoch")
-    ax.set_ylabel("Test MSE Loss")
-    ax.legend(loc="upper right")
-    ax.grid(True, alpha=0.25)
+    ax.set_xlabel("Epoch", fontsize=11)
+    ax.set_ylabel("Test MSE Loss", fontsize=11)
+    ax.legend(loc="upper right", fontsize=10)
+    ax.grid(True, alpha=0.35, linestyle="--")
     fig.tight_layout()
+
+    # リポジトリ直下 + Zenn 記事用 images フォルダの両方に保存
     out_png = repo / "loss_comparison_test.png"
-    fig.savefig(out_png, dpi=300, facecolor=fig.get_facecolor())
+    fig.savefig(out_png, dpi=150, bbox_inches="tight")
+
+    zenn_images = repo.parent / "zenn-articles" / "images"
+    if zenn_images.is_dir():
+        zenn_out = zenn_images / "phase1-06-loss-comparison-test.png"
+        fig.savefig(zenn_out, dpi=150, bbox_inches="tight")
+        print(f"Saved figure (Zenn): {zenn_out}")
+
     plt.close(fig)
     print(f"Saved figure: {out_png}")
 
