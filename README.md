@@ -82,11 +82,6 @@ python src/python/visualize.py --animate
 * 複雑な CAD 由来の非構造メッシュへの対応とゼロショット汎化性能の検証。
 * 離散外微分の演算子（外微分 *d*、余微分 *δ*）を厳密に組み込んだ高度な Physics-Informed Loss の実装。
 
-## 📎 関連
-
-* 公開用の記事・下書きは **`docs/` をローカルで保持**し、本リポジトリには含めていません（`.gitignore`）。Zenn 用の Markdown は [zenn-articles](https://github.com/kohmaruworks/zenn-articles) など別リポジトリを参照してください。
-* ベースライン・連載との対比: [physics-gnn-surrogate-act](https://github.com/kohmaruworks/physics-gnn-surrogate-act)、[physics-gnn-surrogate-basic](https://github.com/kohmaruworks/physics-gnn-surrogate-basic)
-
 ## ライセンス
 
 （リポジトリ管理者が `LICENSE` を追加してください。）
