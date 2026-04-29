@@ -84,4 +84,4 @@ python src/python/visualize.py --animate
 
 ## ライセンス
 
-（リポジトリ管理者が `LICENSE` を追加してください。）
+本プロジェクトは [MIT License](LICENSE) のもとで公開されています。
