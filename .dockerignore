@@ -1,0 +1,9 @@
+.git
+**/.DS_Store
+.venv/
+venv/
+__pycache__/
+data/interim/*
+!data/interim/.gitkeep
+.env
+.env.*
