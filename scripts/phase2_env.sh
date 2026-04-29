@@ -33,7 +33,7 @@ fi
 if command -v julia &>/dev/null; then
   echo "[phase2] julia: $(command -v julia) ($(julia --version 2>/dev/null | head -1))"
 else
-  echo "[phase2] 警告: julia が PATH にありません。juliaup 導入と docs/julia_setup.md を参照" >&2
+  echo "[phase2] 警告: julia が PATH にありません。juliaup 導入と docs/julia/julia_setup.md を参照" >&2
 fi
 
 unset _P2_ROOT
