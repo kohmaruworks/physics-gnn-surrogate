@@ -20,7 +20,7 @@ physics-gnn-surrogate-phase2/
 ├── data/
 │   └── interim/        # Julia から出力される JSON、学習済み .pth、推論 .npy / .npz、比較図・GIF
 ├── docs/
-│   └── julia/          # Julia 環境構築ガイド（README 本文のリンク先）
+│   └── julia_setup.md  # Julia 環境構築ガイド（README 本文のリンク先）
 ├── scripts/
 │   └── phase2_env.sh   # venv + Julia PATH 用ヘルパ（任意）
 ├── src/
@@ -38,7 +38,7 @@ physics-gnn-surrogate-phase2/
 
 ### 1. データ生成（Julia）
 
-Julia 1.9 以上が必要です。Julia 本体の導入や `Pkg.instantiate()` の詳細は [**Julia 環境のセットアップ**](docs/julia/julia_setup.md) を参照してください。`CombinatorialSpaces` 等を用いてグラウンドトゥルースを生成します。
+Julia 1.9 以上が必要です。Julia 本体の導入や `Pkg.instantiate()` の詳細は [**Julia 環境のセットアップ**](docs/julia_setup.md) を参照してください。`CombinatorialSpaces` 等を用いてグラウンドトゥルースを生成します。
 
 ```bash
 julia --project=src/julia -e 'using Pkg; Pkg.instantiate()'
