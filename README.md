@@ -1,45 +1,74 @@
 # Physics-Informed HeteroGNN Surrogate
 
+[English](#english) | [日本語](#japanese)
+
 [![Julia](https://img.shields.io/badge/Julia-1.9%2B-9558B2?style=flat-square&logo=julia&logoColor=white)](https://julialang.org/)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch Geometric](https://img.shields.io/badge/PyTorch%20Geometric-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)](https://pytorch-geometric.readthedocs.io/)
 
 ---
 
-## English Version
+<h2 id="english">English Version</h2>
 
-### Overview
+### Overview & Architecture
 
-This repository provides a reproducible surrogate pipeline for **multiphysics CFD**: **Discrete Exterior Calculus (DEC)**–aware **Primal and Dual complexes** are exported from **Julia** and consumed by **heterogeneous graph neural networks (HeteroGNNs)** implemented in **Python** with **PyTorch Geometric** (`HeteroConv`, `SAGEConv`). The goal is to retain mesh-native topological priors—rather than collapsing everything into a homogeneous adjacency—and to amortize costly forward solves with neural rollouts suitable for exploratory design and benchmarking.
+This repository provides a reproducible surrogate pipeline for **multiphysics CFD**: **Discrete Exterior Calculus (DEC)**–aware **Primal and Dual complexes** are exported from **Julia** and consumed by **heterogeneous graph neural networks (HeteroGNNs)** in **Python** with **PyTorch Geometric** (`HeteroConv`, `SAGEConv`). The aim is to preserve mesh-native topological priors—rather than collapsing dynamics into a single homogeneous graph—and to amortize forward solves with neural rollouts suited to research and engineering iteration.
 
-Architecturally, the project prioritizes **a strict interoperability contract** (JSON), **index-sane boundaries** between 1-based and 0-based stacks, and **compositionality-friendly** decomposition for future multiphysics extensions.
+Architecturally, we enforce a **strict JSON contract** across runtimes, **1-based → 0-based index normalization** at the export seam, and **compositionality-oriented** module boundaries for future multiphysics extensions.
+
+The figure below is a **conceptual** dataflow (stack names reflect the intended categorical / dynamics tooling; see **`src/julia/Project.toml`** for the exact pinned Julia packages used in this snapshot).
+
+```mermaid
+graph LR
+  subgraph JL["Julia (ACT / dynamics)"]
+    ACS["Catlab.Graphs / ACSets"]
+    DEQ["DifferentialEquations.jl"]
+    J3["JSON3.jl"]
+    ACS --> J3
+    DEQ --> J3
+  end
+  subgraph JC["JSON interchange"]
+    CTR["Contract: physics_gnn_interim_v2<br/>0-based topology + time series"]
+  end
+  subgraph PY["Python (PyG / AI)"]
+    GCN["Homogeneous GCN baseline"]
+    HD["HeteroData + HeteroConv"]
+    TV["Training & visualization"]
+    GCN -.->|ablation / comparison| HD
+    HD --> TV
+  end
+  J3 --> CTR
+  CTR -->|parse & validate| HD
+  HD -.->|future coupling| DEQ
+```
+
+- **Solid arrows:** today's batch pipeline — Julia exports **JSON**, Python builds **`HeteroData`** and runs **training / autoregressive inference / plotting**.
+- **Dashed «future coupling»:** optional tighter integration (e.g., co-simulation or in-process bridging); **not** required for reproducibility of the JSON-first workflow shipped here.
+
+Large artefacts under **`data/interim/`** (JSON, checkpoints, rollouts, figures) are typically **ignored by Git** — reproduce them locally with the **Quick Start** commands below rather than committing binaries.
 
 ### Key Features
 
-- **Language boundary (Julia ⇄ Python).** Julia owns **mesh generation** and **physics-motivated discrete dynamics**; Python owns **representation learning, training, autoregressive inference, and plotting**. Stacks communicate exclusively through versioned **`physics_gnn_interim_v2`** JSON—**not** coupled runtimes—so workflows remain deterministic and reproducible across machines.
+- **Language boundary.** Julia retains **physics modeling and discrete simulation exports**; Python retains **representation learning, training, autoregressive rollout, and visualization**. Stacks meet only via the versioned **`physics_gnn_interim_v2`** **JSON Contract**, eliminating implicit in-process coupling.
 
-- **Index safety.** Julia indexing is **1-based**; NumPy / PyTorch use **0-based** semantics. Topology arrays are normalized **exactly once** at export (**`utils_export.jl`**) with coherent COO layout for **`edge_index`**, mitigating the ubiquitous class of silent **Primal–Dual misbindings** when crossing language boundaries.
+- **Index safety.** **1-based** Julia arrays are reconciled with **0-based** PyTorch/NumPy **once**, at **`utils_export.jl`**, with consistent COO layout for **`edge_index`** — guarding against silent **Primal–Dual topology drift** across the FFI-style boundary.
 
-- **Modularity and compositionality.** The repository splits mesh utilities, exporters, PyG loaders, trainers, rollout engines, and visualization—aligned with **compositionality** motifs from applied category theory and easing replacement of discrete models (e.g., richer physics kernels or categorical DSL backends) **without rewriting the entire surrogate stack.**
+- **Modularity & compositionality.** Separate modules for mesh/discretization, export, PyG ingestion, optimization, rollout, and plotting mirror **compositionality** expectations from applied category theory, so discrete physics backends or DSLs can evolve **without rewriting the full surrogate stack.**
 
-- **Heterogeneous message passing.** `PhysicsHeteroGNN` routes messages along **within-Primal**, **within-Dual**, and **`primal_to_dual`** relations, capturing DEC-flavored placements of discrete fields rather than homogeneous lumping alone.
-
-- **Physics-informed surrogate term (engineering placeholder).** For incompressible-style regimes we attach a lightweight penalty encouraging **approximately divergence-free kinematics**, formalized loosely as aligning with \(\nabla \cdot \mathbf{v} = 0\) by **approximating divergence-free constraints via cell-wise flux aggregation**: primal velocities are **`scatter_add`–pooled onto dual cells** and penalized—in **spirit only**, not via a DEC-faithful Hodge / star divergence operator suitable for archival verification literature.
-
-- **Closed-loop realism.** Inference supports **autoregressive rollout** (predictions fed back as inputs), surfacing cumulative drift beyond low one-step supervised error—a primary axis for benchmarking learned CFD surrogates.
+Additional technical notes: **HeteroGNN** message passing spans **Primal**, **Dual**, and **`primal_to_dual`** relations; a **physics-informed** term **approximates divergence-free constraints via cell-wise flux aggregation** (primal velocities **`scatter_add`–pooled to dual cells**) as a loose surrogate for \(\nabla \cdot \mathbf{v} = 0\), not a DEC-exact discrete Hodge formulation.
 
 ### Quick Start (Usage)
 
-Run from the **repository root**.
+Run from the **repository root**. Interim JSON and other bulky outputs live under **`data/interim/`** and are **excluded from version control** (see **`.gitignore`**) — **regenerate** them with these steps.
 
-**1 · Generate interim JSON (Julia ≥ 1.9)** — see **[docs/julia_setup.md](docs/julia_setup.md)** for toolchain details.
+**1 · Generate interim JSON (Julia ≥ 1.9)** — details in **[docs/julia_setup.md](docs/julia_setup.md)**.
 
 ```bash
 julia --project=src/julia -e 'using Pkg; Pkg.instantiate()'
 julia --project=src/julia src/julia/03_simulation.jl
 ```
 
-Produces **`data/interim/v2_step1_ground_truth_toy.json`** with schema **`physics_gnn_interim_v2`**.
+Writes **`data/interim/v2_step1_ground_truth_toy.json`** with schema **`physics_gnn_interim_v2`**.
 
 **2 · Train (Python ≥ 3.10)**
 
@@ -47,12 +76,11 @@ Produces **`data/interim/v2_step1_ground_truth_toy.json`** with schema **`physic
 python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python src/python/train.py   # checkpoints → data/interim/hetero_gnn_model.pth
+python src/python/train.py   # → data/interim/hetero_gnn_model.pth
 ```
 
-Example flags:  
-`python src/python/train.py --epochs 50 --history-len 1 --lambda-phys 0.1`  
-Alternatively with **[uv](https://docs.astral.sh/uv/)**: `uv venv .venv && source .venv/bin/activate && uv pip install -r requirements.txt`
+Example: `python src/python/train.py --epochs 50 --history-len 1 --lambda-phys 0.1`  
+With **[uv](https://docs.astral.sh/uv/)**: `uv venv .venv && source .venv/bin/activate && uv pip install -r requirements.txt`
 
 **3 · Autoregressive inference + visualization**
 
@@ -61,8 +89,7 @@ python src/python/inference.py
 python src/python/visualize.py --animate
 ```
 
-Optional shell helper combining venv activation and `juliaup` PATH: **`source scripts/setup_env.sh`**  
-Docker: `docker build -t hetero-surrogate-julia .` then `docker run --rm -v "$PWD":/app -w /app hetero-surrogate-julia`
+Optional: **`source scripts/setup_env.sh`** · Docker: `docker build -t hetero-surrogate-julia .` then `docker run --rm -v "$PWD":/app -w /app hetero-surrogate-julia`
 
 ### License
 
@@ -70,39 +97,61 @@ Released under the **MIT License** — see **[LICENSE](LICENSE)**.
 
 ---
 
-## 日本語版 (Japanese Version)
+<h2 id="japanese">日本語版 (Japanese Version)</h2>
 
-### 概要（Overview）
+### 概要とアーキテクチャ（Overview & Architecture）
 
-本リポジトリは、**Discrete Exterior Calculus（離散外微分, DEC）** の位相観に沿った **Primal / Dual 複体** を **Julia** 側で生成・書き出し、**Python** と **PyTorch Geometric（`HeteroConv` 等）** による **異種混合グラフニューラルネットワーク（HeteroGNN）** で学習・推論する、**マルチフィジックス CFD 向けニューラルサロゲート**の再現パイプラインです。メッシュを単一の同種グラフに潰し込まず、場の載る位相を保ったまま **幾何学的深層学習**で前向きシミュレーションのコストを下げることを目的とします。
+本リポジトリは、**Discrete Exterior Calculus（離散外微分, DEC）** の観点に沿った **Primal / Dual 複体** を **Julia** で扱い、その位相を **Python**・**PyTorch Geometric**（**`HeteroConv`** 等）による **異種混合グラフ（HeteroGNN）** に載せ替えて学習・推論する、**マルチフィジックス CFD 向けニューラルサロゲート**の再現パイプラインです。設計の核は **言語間境界**、**JSON Contract**、**インデックス変換の単一関所**、および **合成可能性（Compositionality）** を重視した **疎結合モジュール**です。
 
-設計上の核は、**言語間の明確な境界**、**JSON による厳密な中間表現（Contract）**、**1-based / 0-based を跨ぐインデックスの安全保障**、および **合成可能性（Compositionality）** を意識した **疎結合モジュール分割** にあります。
+下図は **概念的なデータフロー**です（Julia 側のスタック名は、圏論的モデリング／动力学の意図を示す代表例です。**実際に固定されている依存関係は `src/julia/Project.toml`** を参照してください）。
+
+```mermaid
+graph LR
+  subgraph JL["Julia (ACT / dynamics)"]
+    ACS["Catlab.Graphs / ACSets"]
+    DEQ["DifferentialEquations.jl"]
+    J3["JSON3.jl"]
+    ACS --> J3
+    DEQ --> J3
+  end
+  subgraph JC["JSON interchange"]
+    CTR["Contract: physics_gnn_interim_v2<br/>0-based topology + time series"]
+  end
+  subgraph PY["Python (PyG / AI)"]
+    GCN["Homogeneous GCN baseline"]
+    HD["HeteroData + HeteroConv"]
+    TV["Training & visualization"]
+    GCN -.->|ablation / comparison| HD
+    HD --> TV
+  end
+  J3 --> CTR
+  CTR -->|parse & validate| HD
+  HD -.->|future coupling| DEQ
+```
+
+- **実線:** 現行のバッチパイプライン（Julia が **JSON** を出力 → Python が **`HeteroData`** を構築し **学習／自己回帰推論／可視化**）。
+- **破線「future coupling」:** 将来のより密な結合（共同シミュレーション等）のイメージ。**JSON ファースト**の再現性とは独立に検討可能です。
+
+**`data/interim/`** 以下の JSON・学習成果物・ロールアウト等は **`.gitignore` で除外**されることが多いため、リポジトリを clone したら **クイックスタートのコマンドで都度生成**してください。
 
 ### 主な特徴（Key Features）
 
 - **言語間の境界（Language Boundary）**  
-  **Julia**：メッシュ生成・離散物理学に基づくシミュレーション／エクスポートを担当。**Python（PyG）**：表現学習・学習・自己回帰推論・可視化を担当。両者はプロセス内結合ではなく、版付き **`physics_gnn_interim_v2`** **JSON Contract** で連携します。
+  **Julia** が **物理・離散シミュレーションとエクスポート**、**Python（PyG）** が **表現学習・学習・自己回帰推論・可視化**を担当。両者は版付き **`physics_gnn_interim_v2`** **JSON Contract** のみで接続し、プロセス内の暗黙結合を避けます。
 
 - **インデックスの安全保障（Index Safety）**  
-  Julia は **1-based**、NumPy／PyTorch は **0-based** です。**`utils_export.jl`** において変換と COO の取り決めを **一回きりで集約**し、**Dual と Primal の対応だけがずれるサイレントバグ** を構造的に抑え込みます。
+  **1-based**（Julia）と **0-based**（NumPy／PyTorch）の整合を **`utils_export.jl`** に **集中**し、**`edge_index`** の COO 規約を含めて **境界で一度だけ**正規化。Primal／Dual の **サイレントな取り違え**を抑えます。
 
 - **可読性とモジュール性／合成可能性（Modularity）**  
-  メッシュ・エクスポート・データローダ・学習・ロールアウト・可視化が分離され、応用圏論的文脈で重視される **合成可能性（compositionality）** に沿って差し替え可能です。将来的なマルチフィジックスや別離散モデルへの拡張を前提とした **疎結合設計** です。
+  メッシュ・エクスポート・ローダ・学習・ロールアウト・可視化を分離し、応用圏論で重んじる **合成可能性（compositionality）** に沿って部品を差し替え可能にします。マルチフィジックス拡張を見据えた **疎結合設計**です。
 
-- **異種グラフによるメッセージパッシング**  
-  **Primal 内／Dual 内／Primal→Dual（`primal_to_dual`）** の複数リレーション上で情報を伝播し、単一同種モデルだけでは捉えにくい位相情報をモデル入力に明示します。
-
-- **Physics-Informed 損失項（現在はプレースホルダ的性格）**  
-  非圧縮流れにおける質量保存 \(\nabla \cdot \mathbf{v} = 0\) を厳密に離散化するのではなく、**Primal の流速成分を Dual セルへ `scatter_add` で寄せセル単位のフラックスバランスへ近づける**ことで **発散ゼロ約束を粗く近似する正則化**を入れています（DEC の Hodge／星作用素まで踏み込んだ厳密式ではありません）。
-
-- **自己回帰ロールアウト（Closed-loop）**  
-  **Autoregressive rollout** により、1 ステップ誤差が小さくても長ホライズンで誤差が蓄積する現象を評価可能にしています。
+補足：**HeteroGNN** は Primal／Dual／`primal_to_dual` 上でメッセージを流し、**Physics-Informed** 項は \(\nabla \cdot \mathbf{v} = 0\) を **Dual セルへの `scatter_add` 集約**で **粗く近似**する正則化です（DEC の厳密な離散 Hodge 作用素による発散ではありません）。
 
 ### クイックスタート（Quick Start）
 
-リポジトリ**ルート**で実行してください。
+リポジトリ**ルート**で実行。**`data/interim/`** の中身は多くの場合 **Git 管理外**（**`.gitignore`**）のため、**パイプラインで再生成**してください。
 
-**1 · データ生成（Julia ≥ 1.9）** — **`docs/julia_setup.md`** でツールチェーン詳細を参照。
+**1 · データ生成（Julia ≥ 1.9）** — 詳細は **`docs/julia_setup.md`**。
 
 ```bash
 julia --project=src/julia -e 'using Pkg; Pkg.instantiate()'
@@ -121,7 +170,7 @@ python src/python/train.py   # → data/interim/hetero_gnn_model.pth
 ```
 
 例：`python src/python/train.py --epochs 50 --history-len 1 --lambda-phys 0.1`  
-**[uv](https://docs.astral.sh/uv/)** 利用：`uv venv .venv && source .venv/bin/activate && uv pip install -r requirements.txt`
+**[uv](https://docs.astral.sh/uv/)**：`uv venv .venv && source .venv/bin/activate && uv pip install -r requirements.txt`
 
 **3 · 推論・可視化（自己回帰）**
 
