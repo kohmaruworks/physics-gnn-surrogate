@@ -103,7 +103,7 @@ Released under the **MIT License** — see **[LICENSE](LICENSE)**.
 
 本リポジトリは、**Discrete Exterior Calculus（離散外微分, DEC）** の観点に沿った **Primal / Dual 複体** を **Julia** で扱い、その位相を **Python**・**PyTorch Geometric**（**`HeteroConv`** 等）による **異種混合グラフ（HeteroGNN）** に載せ替えて学習・推論する、**マルチフィジックス CFD 向けニューラルサロゲート**の再現パイプラインです。設計の核は **言語間境界**、**JSON Contract**、**インデックス変換の単一関所**、および **合成可能性（Compositionality）** を重視した **疎結合モジュール**です。
 
-下図は **概念的なデータフロー**です（Julia 側のスタック名は、圏論的モデリング／动力学の意図を示す代表例です。**実際に固定されている依存関係は `src/julia/Project.toml`** を参照してください）。
+下図は **概念的なデータフロー**です（Julia 側のスタック名は、圏論的なモデル化や時間発展シミュレーションの意図を示す代表例です。**実際にバージョン固定されている依存関係は `src/julia/Project.toml`**（必要に応じて `Manifest.toml`）を参照してください）。
 
 ```mermaid
 graph LR
