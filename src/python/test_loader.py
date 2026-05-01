@@ -18,6 +18,7 @@ from dataset import (
     E_PRIMAL,
     PRIMAL,
     DUAL,
+    SCHEMA_V2,
     build_hetero_from_interim,
     default_interim_path,
     get_triangle_coo_from_raw,
@@ -60,7 +61,7 @@ def main() -> None:
     _check_tensor(f"{PRIMAL}.y", h0[PRIMAL].y)
     _check_tensor(f"{E_PRIMAL}.edge_index", h0[E_PRIMAL].edge_index, exp_float=False)
 
-    if schema == "physics_gnn_phase2_interim_v2" and DUAL in h0.node_types:
+    if schema == SCHEMA_V2 and DUAL in h0.node_types:
         _check_tensor(f"{DUAL}.x", h0[DUAL].x)
         _check_tensor(f"{DUAL}.y", h0[DUAL].y)
         _check_tensor(f"{E_DUAL}.edge_index", h0[E_DUAL].edge_index, exp_float=False)
@@ -92,7 +93,7 @@ def main() -> None:
     # v1 のみ dual 未登録
     if DUAL not in h0.node_types:
         print(f"\n注: interim v1 のため {DUAL} / {E_DUAL} / {E_P2D} は未設定。")
-    elif schema == "physics_gnn_phase2_interim_v2":
+    elif schema == SCHEMA_V2:
         print(f"\n注: Contract V2 — {DUAL}・{E_DUAL}・{E_P2D} を検証済み。")
 
     print("\nすべての検査に成功しました。")

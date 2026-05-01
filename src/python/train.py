@@ -19,6 +19,7 @@ from dataset import (
     DUAL,
     PRIMAL,
     E_P2D,
+    SCHEMA_V2,
     default_interim_path,
     list_hetero_from_interim,
     load_interim_json,
@@ -92,7 +93,7 @@ def train_epoch(
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Physics-informed HeteroGNN (Phase 2)")
+    p = argparse.ArgumentParser(description="Physics-informed HeteroGNN (HeteroGNN Edition)")
     p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--hidden", type=int, default=64)
@@ -106,7 +107,7 @@ def main() -> None:
 
     json_path = Path(args.json) if args.json else default_interim_path()
     raw = load_interim_json(json_path)
-    if str(raw.get("schema", "")) != "physics_gnn_phase2_interim_v2":
+    if str(raw.get("schema", "")) != SCHEMA_V2:
         print("警告: schema が v2 ではありません。dual / p2d が無いと学習が制限されます。")
 
     data_list = list_hetero_from_interim(raw=raw, history_len=args.history_len, step=1)

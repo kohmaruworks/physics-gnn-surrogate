@@ -414,7 +414,7 @@ def main() -> None:
         title_gt=f"Ground truth (t = {t_axis[gt_time_idx]:.4f})",
         title_pred=f"HeteroGNN autoregressive (step {step + 1}/{s_roll})",
         outfile=out_png,
-        suptitle=f"Phase 2 — scalar ({scalar_label}) + velocity quiver",
+        suptitle=f"HeteroGNN surrogate — scalar ({scalar_label}) + velocity quiver",
         scalar_vmin_vmax=lim_s,
         speed_vmin_vmax=lim_q,
     )

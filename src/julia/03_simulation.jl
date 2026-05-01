@@ -50,10 +50,10 @@ function feature_matrix_nx4(u::AbstractVector, n::Int)
 end
 
 function default_interim_path()
-    joinpath(_ROOT, "data", "interim", "phase2_step1_ground_truth_toy.json")
+    joinpath(_ROOT, "data", "interim", "v2_step1_ground_truth_toy.json")
 end
 
-const PHASE2_SCHEMA_V2 = "physics_gnn_phase2_interim_v2"
+const INTERIM_SCHEMA_V2 = "physics_gnn_interim_v2"
 
 """各 Primal 三角形セル上で、種々の時間ステップにおける頂点特徴のバリセンター平均（dual ノード = 三角形 1 本対 1）。"""
 function dual_features_triangle_avg(F::AbstractMatrix{<:Real}, mesh)
@@ -110,7 +110,7 @@ function run_ground_truth_pipeline(;
         end for F in feature_series]
 
     payload = Dict{String,Any}(
-        "schema" => PHASE2_SCHEMA_V2,
+        "schema" => INTERIM_SCHEMA_V2,
         "indexing_note" => string(
             "All topology indices are 0-based for PyTorch Geometric. ",
             "Julia 1-based indices are converted exactly once via utils_export. ",

@@ -79,7 +79,7 @@ function triangles_flat_rowmajor(m::AbstractMatrix{<:Integer})
     reduce(vcat, [Int.(collect(@view m[:, k])) for k in 1:F])
 end
 
-"""Phase 2 interim JSON Contract V2 用の `topology` 辞書（値は 0-based フラット）。"""
+"""interim JSON Contract V2 用の `topology` 辞書（値は 0-based フラット）。"""
 function topology_dict_v2(;
     primal_edges_1based::Vector{Tuple{Int,Int}},
     dual_edges_1based::Vector{Tuple{Int,Int}},

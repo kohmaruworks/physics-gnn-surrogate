@@ -1,6 +1,6 @@
-# ホストに Julia を入れずに Phase2 の Pkg 環境を使う例
-#   docker build -t phase2-julia .
-#   docker run --rm -v "$PWD":/app -w /app phase2-julia
+# ホストに Julia を入れずに、このリポの Pkg 環境を使う例
+#   docker build -t hetero-surrogate-julia .
+#   docker run --rm -v "$PWD":/app -w /app hetero-surrogate-julia
 
 FROM julia:1.10-bookworm
 

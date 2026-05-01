@@ -30,7 +30,7 @@ julia +release --version
 初回の依存解決（**このリポのルート**で）:
 
 ```bash
-cd /path/to/physics-gnn-surrogate-phase2
+cd /path/to/physics-gnn-surrogate
 julia --project=src/julia -e 'using Pkg; Pkg.instantiate()'
 ```
 
@@ -67,9 +67,9 @@ sudo snap install julia
 `physics-gnn-surrogate-act` / `physics-gnn-surrogate-basic` と同様、**Python は `.venv` で切り、パッケージは `uv pip install`**（`site-packages/*/INSTALLER` が `uv`）、**Julia は juliaup（システム側）**です。venv の中に Julia は入りません。
 
 ```bash
-cd physics-gnn-surrogate-phase2
+cd physics-gnn-surrogate
 uv venv .venv && source .venv/bin/activate && uv pip install -r requirements.txt
-source scripts/phase2_env.sh   # venv を再度有効化しつつ juliaup を PATH に（README 参照）
+source scripts/setup_env.sh   # venv を再度有効化しつつ juliaup を PATH に（README 参照）
 julia --project=src/julia -e 'using Pkg; Pkg.instantiate()'
 ```
 
@@ -78,9 +78,9 @@ julia --project=src/julia -e 'using Pkg; Pkg.instantiate()'
 リポジトリ内の `Dockerfile` を参照。ビルド後にコンテナ内で `instantiate` と実行が完結します。
 
 ```bash
-cd physics-gnn-surrogate-phase2
-docker build -t phase2-julia .
-docker run --rm -v "$PWD":/app -w /app phase2-julia
+cd physics-gnn-surrogate
+docker build -t hetero-surrogate-julia .
+docker run --rm -v "$PWD":/app -w /app hetero-surrogate-julia
 ```
 
 `Dockerfile` の `CMD` を用途に合わせて差し替え可能です。

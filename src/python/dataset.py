@@ -1,5 +1,5 @@
 """
-Julia 由来の Phase2 interim JSON を HeteroData へ変換する。
+Julia 由来の interim JSON（HeteroGNN Edition / schema）を HeteroData へ変換する。
 DEC（離散外微分）用のノード/エッジ型名は一貫してここで定義する。
 
 現行 interim v1: primal のみ。v2 では dual / 追加エッジを同じ API で解釈可能。
@@ -25,8 +25,8 @@ E_DUAL = (DUAL, "adjacent_to", DUAL)  # 双対格子の辺
 E_P2D = (PRIMAL, "primal_to_dual", DUAL)  # 原始→双対（例: 面に属する角）
 E_D2P = (DUAL, "dual_to_primal", PRIMAL)  # 学習時メッセージ戻し用（データ上は p2d の転置）
 
-SCHEMA_V1 = "physics_gnn_phase2_interim_v1"
-SCHEMA_V2 = "physics_gnn_phase2_interim_v2"
+SCHEMA_V1 = "physics_gnn_interim_v1"
+SCHEMA_V2 = "physics_gnn_interim_v2"
 
 
 # --- 厳格な型変換 -------------------------------------------------------------------------
@@ -165,7 +165,7 @@ def flat_to_triangle_coo(flat: Sequence[int], *, n_nodes: int) -> Optional[Tenso
 
 def default_interim_path(project_root: Optional[Path] = None) -> Path:
     root = project_root or Path(__file__).resolve().parents[2]
-    return root / "data" / "interim" / "phase2_step1_ground_truth_toy.json"
+    return root / "data" / "interim" / "v2_step1_ground_truth_toy.json"
 
 
 def load_interim_json(path: Path) -> Dict[str, Any]:
