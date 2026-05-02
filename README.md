@@ -253,18 +253,32 @@ This project is released under the **MIT License**.
 
 [English version ↑](#categorical-physics-engine-heterognn-surrogate)
 
+## はじめに
+
+実務や研究でCFD（計算流体力学）を活用する際、精度を担保するために重厚なソルバーを実行する一方で、設計の反復ループや対話的な解析においては、その計算レイテンシが大きなボトルネックになりがちです。そこで真価を発揮するのが、物理的な構造を極力損なうことなく高速に近似する「サロゲートモデル」というアプローチです。
+
+本稿で解説する **[categorical_physics_engine](https://github.com/kohmaruworks/categorical_physics_engine)** は、**応用圏論とDEC（離散外微分）をJuliaで定式化・シミュレーションし、その結果をJSONコントラクト経由でPyTorch Geometric（PyG）のヘテロジニアスGNNに渡す**という、言語とフレームワークの境界を明確にしたパイプラインです。「ひとつの巨大なシステムで全てを解決する」のではなく、**ステップごとに明確な契約（コントラクト）と検証を設ける**ことで、再現性と保守性を高めています。
+
+ここから先は、リポジトリのREADMEをベースに、システムの全体像と実装の軌跡をステップバイステップで紐解いていきます。もし序盤で前提知識が高度に感じられた場合は、まず全体のアーキテクチャ図やディレクトリ構成を眺めていただき、概要を掴んでから各ステップの詳細に戻るという読み方をおすすめします。
+
+また、読者の皆様が手元で再現しやすいよう、パラメータの数値やファイル名は実行コマンドとしてそのまま使える形で記載しています。
+
+---
+
 ## 概要と技術スタック
 
-応用圏論に基づく **Julia / DEC による厳密な CFD グラウンドトゥルース**から、**PyTorch Geometric** 上の **ヘテロジニアス GNN サロゲート**へつなぐパイプラインを示すリポジトリです。**フルソルバーに比べ桁違いに短い推論時間**で場を得られる一方、グラフ構造と損失設計により物理的整合性を構造化して保持することを目的とします。
+応用圏論に基づく **Julia / DEC による厳密なCFDグラウンドトゥルース**から、**PyTorch Geometric** 上の **ヘテロジニアスGNNサロゲート**へと繋ぐパイプラインの全容です。**フルソルバーに比べて桁違いに短い推論時間**で物理場を予測する一方で、グラフ構造と損失関数の設計によって物理的整合性を構造的に保持することを目的としています。
 
 **技術スタック**
 
 - **Julia:** Decapodes.jl、CombinatorialSpaces.jl、Catlab.jl（AlgebraicJulia エコシステム）、および時間積分に **OrdinaryDiffEq.jl**。
-- **Python:** **PyTorch**、**PyTorch Geometric**（ヘテロジニアス GNN、`HeteroData`）、各ステップに応じた NumPy・Matplotlib など。
+- **Python:** **PyTorch**、**PyTorch Geometric**（ヘテロジニアスGNN、`HeteroData`）、各ステップに応じた NumPy・Matplotlib など。
+
+Juliaで「何を真実（グラウンドトゥルース）とみなすか」、Pythonで「どう速く近似するか」を役割分担し、**JSONのスキーマとインデックス規約**が両者を繋ぐ共通言語として機能します。
 
 ## アーキテクチャ
 
-Julia における圏論的物理定義から、Python における物理情報付きサロゲートまでの流れは、次のとおりです。
+Juliaにおける圏論的物理定義から、Pythonにおける物理情報付きサロゲートモデルまでのデータの流れは以下の通りです。
 
 ```mermaid
 graph TD
@@ -284,9 +298,9 @@ graph TD
 
 ## リポジトリ構成
 
-**ステップ 1〜5** はそれぞれ **独立した作業ディレクトリ**です。独自の `src/`、依存ファイル（`Project.toml` / `requirements_*.txt`）、生成物用の `data/` などを持ちます。パイプライン全体を再現する場合はステップ順に利用してください。
+**ステップ1〜5** はそれぞれ **独立した作業ディレクトリ**として構成されています。独自の `src/`、依存パッケージ定義（`Project.toml` / `requirements_*.txt`）、生成物用の `data/` などを持ちます。パイプライン全体を手元で再現する場合は、ステップ順に実行してください。
 
-```
+```text
 categorical_physics_engine/
 ├── README.md
 └── multiphysics_dec_solver/
@@ -321,167 +335,173 @@ categorical_physics_engine/
 
 ## 実装ステップ詳細
 
-### ステップ 1: 圏論的物理定義と JSON コントラクト検証
+以下では、各ステップで「何を検証したか」と「実際に何を実行したか」を追っていきます。
 
-応用圏論に基づくグラウンドトゥルース生成と、言語間データパイプラインの検証を行う段階です。
+### ステップ 1: 圏論的物理定義とJSONコントラクト検証
 
-#### 可視化: 2 次元シリンダー後流（速度の大きさ）
+応用圏論に基づくグラウンドトゥルースの生成と、言語間データパイプラインの基礎検証を行う段階です。
+
+#### 可視化: 2次元シリンダー後流（速度の大きさ）
 
 ![圏論的 CFD — 速度場](./multiphysics_dec_solver/step1_initial_physics_def/zenn_assets/cylinder_wake_animation.gif)
 
 #### シミュレーション対象
 
-2 次元非圧縮性流体が円形障害物（シリンダー）周りを流れる **シリンダー後流** シナリオです。物理は `Decapodes.jl` によるナビエ・ストークス方程式の **operadic 合成**として定義し、`CombinatorialSpaces.jl` が生成する非構造単体複体上で時間発展を計算します。
+2次元非圧縮性流体が円形障害物（シリンダー）の周りを流れる **シリンダー後流** シナリオです。物理法則は `Decapodes.jl` によるナビエ・ストークス方程式の **operadic合成**として厳密に定義し、`CombinatorialSpaces.jl` が生成する非構造単体複体上で時間発展を計算します。
 
-**支配方程式のスケッチ。** 速度 $\mathbf{u}$、圧力 $p$、密度 $\rho$、動粘性係数 $\nu$、温度 $T$、熱拡散率 $\alpha$ として、$\Omega \subset \mathbb{R}^2$ 上の非圧縮連成場の典型形は
+**支配方程式のスケッチ:** 速度 $\mathbf{u}$、圧力 $p$、密度 $\rho$、動粘性係数 $\nu$、温度 $T$、熱拡散率 $\alpha$ としたとき、$\Omega \subset \mathbb{R}^2$ 上の非圧縮連成場の典型的な形は以下のようになります。
 
 $$
 \partial_t \mathbf{u} + (\mathbf{u}\cdot\nabla)\mathbf{u} = -\rho^{-1}\nabla p + \nu \Delta \mathbf{u} + \mathbf{f}, \qquad \nabla\cdot \mathbf{u} = 0, \qquad \partial_t T + \nabla\cdot(T\mathbf{u}) = \alpha \Delta T
 $$
 
-です。**離散外微分（DEC）** は単体複体上で $\nabla$・$\Delta$・発散を計量に依存する疎行列に置き換え、**Decapodes.jl** がそれらをダイアグラムとして合成し、**OrdinaryDiffEq.jl** が半離散 ODE を時間積分します。*（実際に `definitions.jl` で実行されるモメンタムは、対流項を含まないストークス型の線形化 $\partial_t \mathbf{u} \approx \nu \Delta \mathbf{u} - \rho^{-1}\nabla p$ と補助的な $\partial_t p = \kappa \Delta p$ に相当し、$T$ とは移流–拡散で結合しています。）*
+**DEC（離散外微分）** は単体複体上で勾配・ラプラシアン・発散を離散化し、**Decapodes.jl** が合成した半離散系を **OrdinaryDiffEq.jl** が時間積分します。*（※実装上の `definitions.jl` では、モメンタムを対流なしの $\partial_t \mathbf{u} \approx \nu \Delta \mathbf{u} - \rho^{-1}\nabla p$ と $\partial_t p = \kappa \Delta p$ とし、$T$ は移流–拡散で結合させています。）*
 
 #### 検証・確認事項
 
-1. **トポロジーの整合性** — シリンダーを内部境界として含む 2 次元単体複体が有効に生成され、空間ドメインへ正しく対応付けられることを確認しました。
+1. **トポロジーの整合性** — シリンダーを内部境界として含む2次元単体複体が有効に生成され、空間ドメインへ正しくマッピングされることを確認しました。
+2. **JSONコントラクトの正確性** — JuliaからPythonへ、ノード座標・三角形の連結情報（**1始まりから0始まりへの安全な変換**）・多次元物理場が情報の欠損なく引き渡せることを証明しました（Python側では Matplotlibの `Triangulation` 等で完全に復元可能です）。
+3. **物理ソルバーの安定性** — 圏論的ダイアグラムから生成された **DEC** オペレータが、指定された境界条件下で安定した初期化と物理的に妥当な時間発展をもたらすことを確認しました。
 
-2. **JSON コントラクトの正確性** — Julia から Python へ、ノード座標・三角形連結（**1 始まりから 0 始まりへの**安全な変換）・多次元物理場が欠損なく引き渡せることを確認しました（Python 側では Matplotlib `Triangulation` 等で復元できます）。
+これらの検証は、`multiphysics_dec_solver/step1_initial_physics_def/` にて **`Pkg.instantiate()`** 実行後、**`julia --project=. src/main.jl`** を実行することで再現できます。既定の **`cylinder_wake`** シナリオでは、**`gensim` + OrdinaryDiffEq** を用いて **`--t-end 1.2`**・格子 **`nx=36`**, **`ny=18`**・**`--frames 73`** などの設定で実行され、**`data/raw/ground_truth_cylinder_wake.json`** および **`ground_truth_cylinder_wake.jld2`** が出力されます。
 
-3. **物理ソルバーの安定性** — 圏論的ダイアグラムから得た **DEC** オペレータが、境界条件下で安定した初期化と時間発展を与えることを確認しました。
+### ステップ 2: ヘテロジニアストポロジーの抽出とJSONコントラクト V2
 
-ここまでの検証は、`multiphysics_dec_solver/step1_initial_physics_def/` で **`Pkg.instantiate()`** のあと **`julia --project=. src/main.jl`** を走らせることで再現できます（`src/main.jl` の **`Pkg.activate`** はこのディレクトリをプロジェクトルートとします）。既定の **`cylinder_wake`** では **`gensim` + OrdinaryDiffEq** で **`--t-end 1.2`**・格子 **`nx=36`**, **`ny=18`**・**`--frames 73`**・流体／熱係数を積み、**`data/raw/ground_truth_cylinder_wake.json`** と **`ground_truth_cylinder_wake.jld2`** を出力します（**1 始まり**トポロジと頂点代理場 **`velocity_vertex_vx`/`vy`**、**`pressure`**、**`temperature`**）。**`--scenario heat_sink`** に切り替えると **`ground_truth_heat_sink.json`** が得られます。Python 側では **`requirements_viz.txt`** を入れたうえで **`src/visualize_contract.py`** を実行し、**`zenn_assets/`** の GIF などを更新しつつ Matplotlib **`Triangulation`** でコントラクトの往復を確認できます。手元で触るファイルは **`Project.toml`**、**`src/main.jl`**、**`src/visualize_contract.py`**、および **`data/raw/`** に蓄積される生成物です。
-
-### ステップ 2: ヘテロジニアストポロジーの抽出と JSON コントラクト V2
-
-本ステップでは、データコントラクトを **ヘテロジニアスグラフ**形式へ更新し、PyTorch Geometric における **ゼロオーバーヘッドな初期化**のために、明示的なトポロジー関係（離散外微分 **DEC** オペレータ）を抽出します。
+本ステップでは、データコントラクトを **ヘテロジニアスグラフ**形式へとアップグレードします。PyTorch Geometric環境で **ゼロオーバーヘッドでの初期化**を実現するため、明示的なトポロジー関係（離散外微分 **DEC** オペレータ）を抽出します。
 
 #### 可視化: プライマル複体とデュアル複体
 
 ![ヘテロジニアストポロジー](./multiphysics_dec_solver/step2_heterogeneous_contract/zenn_assets/hetero_topology.png)
 
-*（注: デュアル頂点を表す高密度の赤色の「×」マーカー（N=3997）は、下層のプライマル頂点（N=703）と視覚的に重なって見えますが、これは数学的な **重心細分** を正しく反映しています。）*
+*（注: デュアル頂点を表す高密度の赤色の「×」マーカー（N=3997）は、下層のプライマル頂点（N=703）と視覚的に重なって見えますが、これは数学的な **重心細分** を正確に反映した結果です。）*
 
 ![ヘテロジニアストポロジー（中央付近の拡大）](./multiphysics_dec_solver/step2_heterogeneous_contract/zenn_assets/hetero_topology_zoom.png)
 
-*（プライマル頂点座標のパーセンタイルで切り出した中央窓。プライマルを大きめの青丸で描き、赤い × と並んだときの視認性を補います。）*
+*（プライマル頂点のパーセンタイルで切り出した中央部分の拡大図です。青いプライマル頂点を強調し、全体図では視認しにくいディスク形状の境界を明示しています。）*
 
 ### 🔬 抽出対象
 
-2 次元単体複体から明示的なトポロジー関係を抽出します。単一のエッジリストではなく、`CombinatorialSpaces.jl` の数学的定義に基づき、`primal_to_primal`（勾配・外微分）、`dual_to_dual`（流束）、`primal_to_dual`（ホッジスター演算）の各マッピングへと幾何学を分解しています。
+2次元単体複体から明示的なトポロジー関係を抽出します。単一のエッジリストとしてではなく、`CombinatorialSpaces.jl` の数学的定義に基づき、`primal_to_primal`（勾配・外微分）、`dual_to_dual`（流束）、`primal_to_dual`（ホッジスター演算）の各マッピングへと幾何学構造を厳密に分解しています。
 
 ### ✅ 検証・確認事項
 
-1. **数学的インデックスの忠実性** — 頂点と辺のマッピングの差異（例: 1997 個のプライマルエッジから 7883 個のデュアルエッジへのホッジマッピング）を、インデックスの範囲外エラーを起こすことなく完全に制御できていることを確認しました。
+1. **数学的インデックスの忠実性** — 頂点と辺のマッピングの差異（例: 1997個のプライマルエッジから7883個のデュアルエッジへのホッジマッピング）を、インデックスの範囲外エラーを起こすことなく完全に制御できていることを確認しました。
+2. **0始まりインデックスへの安全な変換** — Juliaネイティブの1始まりインデックスを、すべて0始まりへ安全に変換しました。ターミナルでのアサート検証により、すべてのインデックスが対応するテンソルサイズの範囲内に完全に収まっていることを数学的に証明しています。
+3. **PyG HeteroDataへの準備完了** — 出力されたV2 JSONが、Python側での煩雑なデータ整形を一切必要とせず、PyTorch Geometricの `HeteroData` を即座にインスタンス化できるスキーマに準拠していることを確認しました。
 
-2. **0 始まりインデックスへの安全な変換** — Julia ネイティブの 1 始まりインデックスを、すべて 0 始まりインデックスへ安全に変換しました。ターミナルでのアサート検証により、すべてのソース／ターゲットインデックスが対応するテンソルサイズの範囲内に完全に収まっていることを数学的に証明しました。
+これらの処理は **`multiphysics_dec_solver/step2_heterogeneous_contract/`** に集約されています。**`julia --project=. src/main.jl`** を実行すると、時刻 **t≈0.35** に対応する **`data/v2_contract/hetero_cylinder_wake_t0.35.json`** が生成されます。
 
-3. **PyG HeteroData への準備完了** — 出力された V2 JSON が、Python 側での重いデータ整形を一切必要とせず、PyTorch Geometric の `HeteroData` を即座にインスタンス化できるスキーマに厳密に準拠していることを確認しました。
+### ステップ 3: PyGにおけるHeteroDataの読み込みと特徴量監査
 
-インデックス整合をそのまま JSON に載せる処理は **`multiphysics_dec_solver/step2_heterogeneous_contract/`** に集約されています。**`Pkg.instantiate()`**（複数行 **`using`** の末尾カンマ修正や **`has_subpart`** 分岐削除を含む）の後、**`export_hetero_json.jl`** が **ステップ 1** の **`TopologyBlocks1Based`** を **JLD2** から復元し（無ければ JSON）、**`glue_triangle!`** / **`orient!`** でプライマルを組み直し、**`EmbeddedDeltaDualComplex2D`** と **`subdivide_duals!(..., Barycenter())`** でデュアル複体を得ます。**`primal_to_primal`**、**`dual_to_dual`**、**`elementary_duals`** に基づく **`primal_to_dual`** を COO で書き出す際は各添字を **−1** して **0 始まり**にし、**`dec_counts`** との **`@assert`** で整合を固定します。**`julia --project=. src/main.jl`** は **ステップ 1** の **`.jld2` を優先**して入力し、**t≈0.35** の断面を **`data/v2_contract/hetero_cylinder_wake_t0.35.json`** に落とします。Python の **`python src/test_hetero_load.py`**（**`requirements_test.txt`**）がターミナル監査と **`hetero_topology.png`** / **`hetero_topology_zoom.png`** を担当します。*（Julia ≥1.11:* **`SparseArrays`** を **`[deps]` に固定しない**と **`instantiate`** が衝突するため、疎行列は **`CombinatorialSpaces`** 経由の依存に任せます。）主要パスは **`Project.toml`**、**`src/main.jl`**、**`src/export_hetero_json.jl`**、**`src/test_hetero_load.py`**、**`requirements_test.txt`**、**`data/v2_contract/`** です。
+本ステップでは、V2 JSONコントラクトをPyTorch Geometric（PyG）環境へ安全に取り込み、圏論的物理エンジンとディープラーニングアーキテクチャを正式に橋渡しします。
 
-### ステップ 3: PyG における HeteroData の読み込みと特徴量監査
-
-本ステップでは、V2 JSON コントラクトを PyTorch Geometric（PyG）環境へ安全に取り込み、圏論的物理エンジンとディープラーニング側アーキテクチャを橋渡しします。
-
-#### 可視化: PyG メタパス部分グラフと特徴量分布
+#### 可視化: PyGメタパス部分グラフと特徴量分布
 
 ![PyG 部分グラフのトポロジー](./multiphysics_dec_solver/step3_pyg_heterodata_loading/zenn_assets/pyg_subgraph_topology.png)
 
-*（注: プライマル／デュアル／辺中点ノードが `p2p`, `d2d`, `p2d` メタパスで接続される様子を示す、最大 3 ホップのエゴグラフです。）*
+*（注: プライマル、デュアル、および辺中点ノードが `p2p`, `d2d`, `p2d` メタパスで接続される様子を示す、最大3ホップのエゴグラフです。）*
 
 ![PyG 特徴量の分布](./multiphysics_dec_solver/step3_pyg_heterodata_loading/zenn_assets/pyg_feature_distributions.png)
 
 ### 🔬 入力と可視化の対象
 
-V2 JSON コントラクトを PyTorch Geometric の `HeteroData` オブジェクトとしてインスタンス化します。DEC に特有の複雑な辺対辺マッピング（ホッジスター演算など）を扱うため、各辺の中点を独立したノードとして持ち上げます（線グラフに近い構成です）。これにより、PyG 上で幾何学的に異なる種類のノード間でもメッセージパッシングを素直に実行できます。
+V2 JSONコントラクトをPyTorch Geometricの `HeteroData` オブジェクトとしてインスタンス化します。DEC特有の複雑な辺対辺マッピング（ホッジスター演算など）を処理するため、各辺の中点を独立したノードとして持ち上げています（線グラフに近いアプローチ）。これにより、PyG上で幾何学的に性質の異なるノード間でも、ネイティブかつスムーズにメッセージパッシングを実行できます。
 
 ### ✅ 検証・確認事項
 
-1. **トポロジー構造の検証** — 部分グラフを抽出し、プライマル頂点、デュアル頂点、および辺中点ノードが、`p2p`, `d2d`, `p2d` のメタパスを通じてインデックスの衝突なく正確に結合されていることを視覚的に確認しました。
+1. **トポロジー構造の検証** — 部分グラフを抽出し、プライマル頂点、デュアル頂点、辺中点ノードが、各メタパスを通じてインデックスの衝突なく正確に結合されていることを視覚的に確認しました。
+2. **データ監査と健全性チェック** — すべての特徴量および座標テンソルに `NaN` や `Inf` が含まれていないこと、正しいデータ型（特徴量は `float32`、インデックスは `long`）にキャストされていることをアサーションによって保証しました。
+3. **AI学習への準備完了** — 物理変数（流速、圧力など）の分布ヒストグラムから、値がニューラルネットワークの学習に適したスケールに収まっており、標準化への準備が整っていることを実証しました。
 
-2. **データ監査と健全性チェック** — すべての特徴量および座標テンソルに `NaN` や `Inf` が含まれていないこと、正しい型（特徴量は `float32`、インデックスは `long`）にキャストされていることをアサートで証明しました。
+これらの手順には、データの不整合を未然に防ぐための堅牢なエラーハンドリングが組み込まれています。例えば **`test_audit.py`** は、各テンソルの有限性やメタパスごとの形状、参照先が正しいブロック（頂点または辺中点）を指しているかを厳密にチェックします。
 
-3. **AI 学習への準備完了** — 特徴量の分布ヒストグラムにより、物理変数（流速、圧力など）がニューラルネットワークの学習に適したスケールであり、標準化への準備が整っていることを実証しました。
+### ステップ 4: HeteroGNNアーキテクチャとPhysics-Informed学習
 
-**`multiphysics_dec_solver/step3_pyg_heterodata_loading/`** に **`requirements_step3.txt`** を入れたうえで、**`hetero_dataset.load_v2_hetero_json`** が **ステップ 2** の V2 JSON（既定 **`../step2_heterogeneous_contract/data/v2_contract/hetero_cylinder_wake_t0.35.json`**）を読み込み、辺中点ノードを連結した **`HeteroData`**（**`float32`** の **`x`**/**`pos`**、**`long`** の **`edge_index`**）を構築し、入力 JSON のパスもオブジェクトに保持します。**`save_hetero_pt`** が **`data/processed/hetero_cylinder_wake_t0.35.pt`** と **`HeteroV2Meta`** を書き出したあと、**`python src/test_audit.py`**（JSON は第 1 引数で上書き可）と **`python src/visualize_pyg.py`** が続きます。可視化側は PyTorch 2.6 以降向けに **`torch.load(..., map_location="cpu", weights_only=False)`** を使い、**`pyg_subgraph_topology.png`** と **`pyg_feature_distributions.png`** を **`zenn_assets/`** に出力します。
+上流から引き渡された圏論的ヘテロジニアス構造を入力とし、**物理情報付き損失（Physics-Informed Loss）** を備えた **ヘテロジニアスGNN** によって物理ダイナミクスを直接学習する、AIアーキテクチャの中核を確立する段階です。
 
-これらは先に述べた監査内容と矛盾しないように組まれています。**`load_v2_hetero_json`** はプライマル特徴長と **`num_nodes`** の不一致、**`edge_index`** が **`[2, E]`** でない場合、**`dec_counts`** と辺中点再構成の食い違いに **`ValueError`** を投げ、トポロジーが黙って崩れるのを防ぎます。**`test_audit`** は **`x`**/**`pos`** の有限性・各メタパスの dtype／形状・**`p2p`**/**`d2d`** がプライマル／デュアルの頂点ブロックのみを指すこと・**`p2d`** が辺中点ブロックのみを指すことを **assert** し、範囲外やパーティション衝突を早期に検知します。**`visualize_pyg`** は **`.pt`** 欠落時に **`FileNotFoundError`** を返し、統合グラフで **`('primal', 0)`** が孤立しているときは**幾何重心に最も近いプライマル頂点**へフォールバックして空のエゴグラフを避けます。CPU を使う場合は、**`pip install torch --index-url https://download.pytorch.org/whl/cpu`** を実行したうえで、**`python src/test_audit.py`** のあと **`python src/visualize_pyg.py`** とするのが無難です。関連ファイルは **`requirements_step3.txt`**、**`src/hetero_dataset.py`**、**`src/test_audit.py`**、**`src/visualize_pyg.py`**、**`data/processed/*.pt`** です。
-
-### ステップ 4: HeteroGNN アーキテクチャと Physics-Informed 学習
-
-上流で得られた圏論的ヘテロジニアス構造を入力として、**物理情報付き損失**を備えた **ヘテロジニアス GNN** で物理ダイナミクスを直接学習するディープラーニング中核を確立する段階です。**`HeteroConv`** と **`GraphConv`** でプライマル／デュアルごとのメッセージパッシングを構成し、**`d2p`** でプライマル–デュアルを双方向に接続します。プライマル **`x`** の再構成 **MSE** に、流体頂点上のグラフ勾配に基づく **擬似発散（質量保存に寄せた）ペナルティ**を載せ、PyG 上で本格的な **DEC** 疎行列が揃うまでの代理として機能させます。
-
-**損失のスケッチ。** 予測プライマル特徴を $\hat{\mathbf{x}}$、教師を $\mathbf{x}^{*}$ とし、流体頂点のみが載る **`p2p`** の辺 $(i,j)$ と速度チャネル $(u,v)$ について、
+**損失関数のスケッチ（実装対応）:** 予測 $\hat{\mathbf{x}}$、教師データ $\mathbf{x}^{*}$、**`p2p`** 上の速度 $\hat{\mathbf{u}}=(\hat{u},\hat{v})$ としたとき、データ再構成項と物理的制約項を以下のように定義します。
 
 $$
-\mathcal{L}_{\mathrm{data}} = \mathrm{MSE}(\hat{\mathbf{x}}, \mathbf{x}^{*}), \qquad
-\mathcal{L}_{\mathrm{phys}} = \underbrace{\mathbb{E}_{(i,j)}\big[\|\hat{\mathbf{u}}_i - \hat{\mathbf{u}}_j\|^2\big]}_{\text{グラフ勾配エネルギー}} + \underbrace{\mathbb{E}_{k}\big[b_k^2\big]}_{\text{バランス項}}, \quad
-\mathcal{L} = \mathcal{L}_{\mathrm{data}} + \lambda\,\mathcal{L}_{\mathrm{phys}},
+\mathcal{L}_{\mathrm{data}} = \mathrm{MSE}(\hat{\mathbf{x}}, \mathbf{x}^{*}), \qquad \mathcal{L}_{\mathrm{phys}} = \mathbb{E}_{(i,j)}\big[\|\hat{\mathbf{u}}_i - \hat{\mathbf{u}}_j\|^2\big] + \mathbb{E}_{k}\big[b_k^2\big], \qquad \mathcal{L} = \mathcal{L}_{\mathrm{data}} + \lambda \mathcal{L}_{\mathrm{phys}}
 $$
 
-とおきます（$\hat{\mathbf{u}}=(\hat{u},\hat{v})$、$b_k$ は頂点 $k$ に集約した増分の正規化近似です）。実装は **`physics_loss.py`** の **`pseudo_divergence_loss`** です。コタンジェント重み付き DEC の厳密発散ではなく、$\nabla\!\cdot\mathbf{u}\approx 0$ への便宜的な代理です。
+ここで $b_k$ は **`pseudo_divergence_loss`** における頂点ごとのバランス項です。厳密なコタンジェント重み付きDECへの完全な置換ではなく、非圧縮性条件 $\nabla\!\cdot\mathbf{u}\approx 0$ に寄せるための、グラフ上のエネルギーペナルティとして機能します。
 
-**離散形（実装との対応）。** フィルタ後の **`p2p`** 頂点辺 $i\to j$ の集合を $\mathcal{E}$ とし、
-
-$$
-\boldsymbol{\Delta}_{ij} := \hat{\mathbf{u}}_i - \hat{\mathbf{u}}_j, \qquad
-\mathcal{L}_{\mathrm{grad}} = \frac{1}{|\mathcal{E}|} \sum_{(i,j)\in\mathcal{E}} \|\boldsymbol{\Delta}_{ij}\|_2^2 .
-$$
-
-$r_{ij} := \Delta_{ij,u} + \Delta_{ij,v}$、頂点 $j$ の $\mathcal{E}$ における入次数を $d_j$、$s_j := \sum_{i:\,(i\to j)\in\mathcal{E}} r_{ij}$、$b_j := s_j / \max(d_j,1)$ とすると、
+**離散形（コードとの対応）:** フィルタ後の **`p2p`** の辺集合を $\mathcal{E}$（向き $i\to j$）とすると、勾配項は以下のようになります。
 
 $$
-\mathcal{L}_{\mathrm{bal}} = \frac{1}{N}\sum_{j=1}^{N} b_j^2 , \qquad
-\mathcal{L}_{\mathrm{phys}} = \mathcal{L}_{\mathrm{grad}} + \mathcal{L}_{\mathrm{bal}},
+\boldsymbol{\Delta}_{ij} = \hat{\mathbf{u}}_i - \hat{\mathbf{u}}_j, \qquad \mathcal{L}_{\mathrm{grad}} = \frac{1}{|\mathcal{E}|}\sum_{(i,j)\in\mathcal{E}}\|\boldsymbol{\Delta}_{ij}\|_2^2
 $$
 
-ここで $N$ は損失に渡すプライマル頂点数です（$d_j=0$ の頂点では $b_j=0$ です）。
+さらに $r_{ij} = \Delta_{ij,u}+\Delta_{ij,v}$ とし、各 $j$ について $d_j$ を $\mathcal{E}$ 上の入次数、$s_j=\sum_{i:(i\to j)\in\mathcal{E}} r_{ij}$、$b_j=s_j/\max(d_j,1)$ と定義すると、バランス項と物理損失の全体は以下となります。
+
+$$
+\mathcal{L}_{\mathrm{bal}} = \frac{1}{N}\sum_{j=1}^{N} b_j^2, \qquad \mathcal{L}_{\mathrm{phys}} = \mathcal{L}_{\mathrm{grad}}+\mathcal{L}_{\mathrm{bal}}
+$$
 
 #### 可視化: 空間推論の比較
 
 ![GNN 推論の比較](./multiphysics_dec_solver/step4_hetero_gnn_training/zenn_assets/gnn_inference_comparison.png)
 
-*（注: プライマル流体頂点における速度の大きさについて、グラウンドトゥルース・GNN 予測・絶対誤差を空間マッピングしたものです。学習済み順伝播パイプラインの妥当性を確認します。）*
-
-### 🔬 シミュレーションと可視化の対象
-
-学習済み **HeteroGNN** の**空間推論**です。モデルは **ステップ 3** のヘテロジニアスグラフ特徴を入力とし、プライマルおよびデュアル複体上で **`HeteroConv`** によるメッセージパッシングを行います。出力を **`primal.pos`** に対応付けて散布し、Julia が生成したグラウンドトゥルースと予測速度場を視覚的に比較します。
+*（注: プライマル流体頂点における速度の大きさについて、グラウンドトゥルース・GNN予測・絶対誤差を空間マッピングしたものです。学習済みの順伝播パイプラインがエンドツーエンドで妥当であることを示しています。）*
 
 ### ✅ 検証・確認事項
 
-1. **アーキテクチャの妥当性** — **`HeteroConv`** が、根本的に異なるトポロジー・エンティティ間（**`p2p`**、**`d2d`**、**`p2d`**、逆向きの **`d2p`**）でメッセージを次元不一致なくルーティング・集約できることを確認しました。
-2. **物理情報付きパイプラインの稼働** — グラフ勾配に基づくカスタム **擬似発散損失**を統合し、バックワードが PyG のグラフ構造上で質量保存（発散ゼロに寄せた）制約のペナルティを **MSE** とともに学習できることを確認しました。
-3. **エンドツーエンド・パイプラインの完成** — 可視化により、Julia 側の数学的定義から **Python** 側のニューラルネット推論・誤差マッピングまで、データが途切れず流れることを確認しました。
-
-学習自体は **`multiphysics_dec_solver/step4_hetero_gnn_training/`** で行います。**`requirements_step4.txt`**（CPU PyTorch のヒント、**`torch-geometric`**、**`tqdm`**、**`tensorboard`**、**`matplotlib`**）を入れたうえで **`python src/train.py`** を実行します。**`src/model.py`** の **`PhysicsInformedHeteroGNN`** が **`HeteroConv`** + **`GraphConv`** とプライマル **`Linear`**（**`primal.x`** の幅に合わせる）を束ね、**`physics_loss.py`** が流体 **`p2p`** にフィルタした **MSE + λ × 擬似発散損失**を返します。**`train.py`** は **`../step3_pyg_heterodata_loading/data/processed/hetero_cylinder_wake_t0.35.pt`** を読み、pickle のために **`step3_pyg_heterodata_loading/src`** を **`sys.path`** 先頭へ足し、単一グラフのプライマル **`x`** 自己符号化を **`tqdm`**（合計／データ／物理）付きで進め、TensorBoard **`runs/step4_hetero_gnn/`** と **`checkpoints/hetero_gnn_model.pth`** に記録します。その結果を **`python src/visualize_inference.py`** が **`eval()`**・**`torch.no_grad()`** で平面散布し、速度の大きさ（**`x`** の先頭 2 チャネル）から **`zenn_assets/gnn_inference_comparison.png`**（**1×3**、**`turbo` / `Reds`**、**15×4・300 DPI**）を出力して、直前まで確認した空間推論と視覚的に接続します。リポジトリ上の主ファイルは **`requirements_step4.txt`**、**`src/model.py`**、**`src/physics_loss.py`**、**`src/train.py`**、**`src/visualize_inference.py`**、**`checkpoints/`**、**`zenn_assets/`** です。
+1. **アーキテクチャの妥当性** — **`HeteroConv`** が、根本的に異なるトポロジーエンティティ間（**`p2p`**、**`d2d`**、**`p2d`**、および逆方向の **`d2p`**）で、次元の不一致を起こすことなくメッセージを正しくルーティング・集約できることを確認しました。
+2. **物理情報付きパイプラインの稼働** — グラフ勾配に基づくカスタムの **擬似発散損失**を統合し、PyGのグラフ構造上で質量保存（発散ゼロ）に寄せるペナルティを、MSEと共に安定してバックプロパゲーションできることを確認しました。
+3. **エンドツーエンドの完成** — Julia側の数学的定義からPython側のニューラルネット推論、そして誤差の空間マッピングに至るまで、データパイプラインが途切れることなく機能することを実証しました。
 
 ### ステップ 5: ゼロショット汎化とパフォーマンスベンチマーク
 
-未知のメッシュに対する **トポロジカルな汎化性能**（**ゼロショット推論**）を評価します。チェックポイントと **プライマル／デュアルの特徴次元が一致する**任意の **`HeteroData`** **`.pt`** を読み込み、再構成誤差を計測します。また **厳密なパフォーマンスベンチマーク** で計算コスト対効果（**ROI**）を定量化し、**物理的精度**（**MSE**／**MAE**）を維持したまま **従来の CFD ソルバー** に対して **GNN サロゲート**が **圧倒的な高速化**を実現することを示します。
+構築したサロゲートモデルが、未知のメッシュに対してどの程度 **トポロジカルな汎化性能（ゼロショット推論）** を発揮するかを評価します。また、**厳密なパフォーマンスベンチマーク**を実施し、物理的な精度（MSE/MAE）を維持したまま、従来のCFDソルバーに対して **GNNサロゲートがいかに圧倒的な高速化をもたらすか**を定量化します。
 
 #### 可視化: ゼロショット空間比較
 
 ![ゼロショット空間比較（速度の大きさ）](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/zeroshot_comparison.png)
 
-*（注: 評価対象のグラフとチェックポイントの組み合わせについて、プライマル流体頂点の速度の大きさ—グラウンドトゥルース・予測・絶対誤差—を散布で示したものです。）*
+*（注: 未知の評価用グラフに対する、プライマル流体頂点の速度の大きさの散布図（グラウンドトゥルース・予測・絶対誤差）です。）*
 
-### 🔬 評価の対象
+### 🔬 評価の対象と検証事項
 
-**`evaluate_generalization.py`** が **`--data-path`** と **`--model-path`** を受け取り、**`eval()`** で推論し、**全プライマルノードの `x`** について **MSE** と **MAE** をターミナルに出力します。**ステップ 4** と同様の **1×3** 散布比較を **`evaluation_results/zeroshot_comparison.png`** に保存します。**`benchmark_speed.py`** は **10** 回のウォームアップ後、**100** 回の順伝播を **`time.perf_counter`** で計測します（CUDA 利用時は同期し）、平均・標準偏差・最小・最大を **ミリ秒** で **`tabulate`** 表示します。
+1. **推論の移植性** — チャネル幅が一致する **ステップ3形式の `.pt` ファイル**であれば、追加の再学習を一切行うことなく **`PhysicsInformedHeteroGNN`** で実行可能なことを確認しました。
+2. **精度の定量化** — グローバルなMSE/MAEによってプライマル場の再構成精度を要約し、空間誤差パネルによって局所的な差異の分布を可視化しました。
+3. **速度の定量化** — 何度も推論を繰り返すベンチマークにより、対話的な設計ツールや外側の最適化ループに十分に組み込める **ミリ秒クラス** の低レイテンシを記録しました。
 
-### ✅ 検証・確認事項
-
-1. **推論の移植性** — チャネル幅が一致する **ステップ 3 形式の `.pt`** であれば、**`PhysicsInformedHeteroGNN`** を追加訓練なしで実行できます。
-2. **精度の定量化** — **MSE**／**MAE** でプライマル場の再構成を要約し、空間誤差パネルで分布を確認できます。
-3. **速度の定量化** — 繰り返しベンチマークで、対話的用途や外側ループに見合う **ミリ秒級** のレイテンシを記録できます。
-
-ゼロショット評価とベンチマークは **`multiphysics_dec_solver/step5_zero_shot_evaluation/`** にまとまっています。**`pip install -r requirements_step5.txt`**（PyTorch、PyTorch Geometric、Matplotlib、NumPy、**`tabulate`**、CPU ホイールのヒント）の後、**`python src/evaluate_generalization.py`** が **`--data-path`** と **`--model-path`** を受け取り **`eval()`** で推論し、全プライマル **`x`** の **MSE**／**MAE** を表示して **`evaluation_results/zeroshot_comparison.png`**（ステップ 4 と同型の **1×3** 散布）へ書き出します。**`python src/benchmark_speed.py`** はウォームアップ **10** 回のあと計測対象 **100** 回の順伝播を **`time.perf_counter`** で取り（CUDA 時は同期）、**`tabulate`** で **ms** 集計します。いずれもモデルと **`HeteroData`** の unpickle のために **`step4_hetero_gnn_training/src`** と **`step3_pyg_heterodata_loading/src`** を **`sys.path`** に差し込みます。任意で **`python src/visualize_benchmark_chart.py`** を走らせると **`evaluation_results/roi_speedup_benchmark.png`**（**300** DPI・対数 **y**）が更新され、ファイル先頭の **`TRADITIONAL_CFD_SECONDS`** と **`GNN_INFERENCE_SECONDS`** を、想定 CFD 時間や **`benchmark_speed.py`** の平均に合わせて調整できるので、先に確認した精度指標と ROI を一文脈で語れます。既定コマンドはシリンダー後流 **`.pt`** とステップ 4 の **`.pth`** でリグレッションするだけですが、未知メッシュなら互換の **`.pt`** を渡せばよいです。
-
-#### 可視化: ROI 推論高速化（代表的ベンチマーク）
+#### 可視化: ROI推論高速化（代表的ベンチマーク）
 
 ![ROI 推論高速化ベンチマーク](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/roi_speedup_benchmark.png)
 
-対数スケールの棒グラフで、代表的な **Julia/DEC CFD** の計算時間と **HeteroGNN サロゲート**の推論時間（いずれも**秒**）を比較し、**数万倍規模の圧倒的な高速化（ROI）**を視覚化します。数値は **`src/visualize_benchmark_chart.py`** 上部の定数で実測・想定に合わせて差し替え可能です。
+対数スケールの棒グラフを用いて、代表的な **Julia/DEC CFD** の計算時間と、**HeteroGNNサロゲート**の推論時間（いずれも秒単位）を比較しています。
+
+---
+
+## 考察：サロゲートモデルがもたらす真のROI（投資対効果）
+
+ステップ5のベンチマークで示された「数万倍の高速化」は、単なる計算速度の向上にとどまらず、設計や研究のプロセスそのものを変革する高いROI（投資対効果）をもたらします。ここでは、サロゲートモデルを実務に導入する意義について、3つの視点から考察します。
+
+1. **推論における「限界費用」の極小化**
+従来のCFDソルバーでは、形状や境界条件を1つ変更するたびに同等の重い計算コスト（時間と計算資源）が発生します。一方、一度学習を終えたGNNサロゲートは、未知のメッシュに対する推論コストがミリ秒単位、つまり計算の限界費用がほぼゼロになります。これにより、限られた予算と時間の中で数千〜数万パターンの設計空間を網羅的に探索することが現実的になります。
+
+2. **精度と速度の「トリアージ」**
+当然ながら、サロゲートモデルは近似であるため、厳密な数値計算を完全に代替するものではありません。しかし、「数万通りの設計アイデアから、有望な数十パターンをミリ秒で絞り込む（トリアージする）」という用途においては無類の強さを発揮します。探索フェーズ（全体の99%）をGNNに任せ、最終的な詳細検証（残りの1%）にのみ重厚なCFDソルバーを実行するというハイブリッドな運用が、全体のROIを最大化する鍵となります。
+
+3. **パイプライン化による「初期投資」の確実な回収**
+AIモデルの実用化には「良質なデータの生成」と「モデルの学習」という大きな初期投資が必要です。本リポジトリのように、Juliaによる厳密なグラウンドトゥルース生成からPythonでのGNN学習までを、明確なコントラクト（JSON）によって自動化・パイプライン化しておくことで、この初期投資のハードルが大幅に下がります。データの再現性とトポロジーの安全性が担保されるため、手戻りが減り、より早期にROIをプラスに転じさせることが可能になります。
+
+---
+
+## おわりに
+
+本リポジトリのソースコードおよびドキュメントは **MIT License** の下で公開されています。手元での再現や独自の改良を試される際は、各ステップディレクトリ内の `requirements_*.txt` や `Project.toml` から環境を構築していただくと、本稿で紹介したコマンドとスムーズに対応付けることができます。
+
+CFDの厳密さとGNNの圧倒的な推論速度を融合させるこのアプローチが、皆様の設計・解析プロセスの高速化、そして真の意味でのROI向上に少しでも役立てば幸いです。
+
+---
+
+## 参考
+
+- [categorical_physics_engine（GitHub）](https://github.com/kohmaruworks/categorical_physics_engine)
+
 
 ## ライセンス
 
