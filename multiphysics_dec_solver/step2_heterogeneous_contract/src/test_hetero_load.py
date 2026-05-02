@@ -20,6 +20,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_JSON = ROOT / "data" / "v2_contract" / "hetero_cylinder_wake_t0.35.json"
 OUT_FIG = ROOT / "zenn_assets" / "hetero_topology.png"
+OUT_FIG_ZOOM = ROOT / "zenn_assets" / "hetero_topology_zoom.png"
 
 
 def load_contract(path: Path) -> dict:
@@ -168,6 +169,88 @@ def plot_topology(data: dict, out_path: Path, max_pd_segments: int = 1000) -> No
     print(f"\nSaved figure: {out_path} (primal_to_dual segments drawn: {n_draw})")
 
 
+def plot_topology_zoom(
+    data: dict,
+    out_path: Path,
+    *,
+    max_pd_segments: int = 800,
+    pct_lo: float = 12.0,
+    pct_hi: float = 88.0,
+) -> None:
+    """
+    Same topology view as ``plot_topology``, but crop to the central domain window
+    (percentile bounds on primal vertices) so blue primal disks remain visible
+    amid dense red dual markers.
+    """
+    nodes = data["nodes"]
+    edges = data["edges"]
+    dec = data["dec_counts"]
+
+    primal_xy = np.asarray(nodes["primal"]["coordinates"], dtype=np.float64)
+    dual_xy = np.asarray(nodes["dual"]["coordinates"], dtype=np.float64)
+
+    pp_src = np.asarray(edges["primal_to_primal"]["edge_index"][0], dtype=np.int64)
+    pp_dst = np.asarray(edges["primal_to_primal"]["edge_index"][1], dtype=np.int64)
+    dd_src = np.asarray(edges["dual_to_dual"]["edge_index"][0], dtype=np.int64)
+    dd_dst = np.asarray(edges["dual_to_dual"]["edge_index"][1], dtype=np.int64)
+    pd_src = np.asarray(edges["primal_to_dual"]["edge_index"][0], dtype=np.int64)
+    pd_dst = np.asarray(edges["primal_to_dual"]["edge_index"][1], dtype=np.int64)
+
+    primal_edge_mid = edge_midpoints_from_bidirected_coo(primal_xy, pp_src, pp_dst)
+    dual_edge_mid = edge_midpoints_from_bidirected_coo(dual_xy, dd_src, dd_dst)
+
+    xmin, xmax = np.percentile(primal_xy[:, 0], [pct_lo, pct_hi])
+    ymin, ymax = np.percentile(primal_xy[:, 1], [pct_lo, pct_hi])
+    pad = 0.06 * max(xmax - xmin, ymax - ymin, 1e-9)
+
+    fig, ax = plt.subplots(figsize=(8, 6), dpi=300)
+    ax.set_aspect("equal", adjustable="box")
+
+    n_draw = min(max_pd_segments, pd_src.shape[0])
+    idx = np.arange(n_draw)
+    segs = np.stack(
+        [primal_edge_mid[pd_src[idx]], dual_edge_mid[pd_dst[idx]]], axis=1
+    )
+    lc = plt.matplotlib.collections.LineCollection(
+        segs, colors="0.55", linewidths=0.9, alpha=0.35
+    )
+    ax.add_collection(lc)
+
+    ax.scatter(
+        primal_xy[:, 0],
+        primal_xy[:, 1],
+        s=36,
+        c="tab:blue",
+        marker="o",
+        label="Primal vertices",
+        zorder=3,
+        edgecolors="navy",
+        linewidths=0.25,
+    )
+    ax.scatter(
+        dual_xy[:, 0],
+        dual_xy[:, 1],
+        s=28,
+        c="tab:red",
+        marker="x",
+        label="Dual vertices",
+        zorder=4,
+        linewidths=0.9,
+    )
+
+    ax.set_xlim(xmin - pad, xmax + pad)
+    ax.set_ylim(ymin - pad, ymax + pad)
+    ax.set_title("Zoom: Primal & Dual (central window)")
+    ax.legend(loc="upper right", fontsize=9)
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"\nSaved zoom figure: {out_path} (primal_to_dual segments drawn: {n_draw})")
+
+
 def main() -> None:
     path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_JSON
     if not path.is_file():
@@ -176,6 +259,7 @@ def main() -> None:
     data = load_contract(path)
     print_and_validate(data)
     plot_topology(data, OUT_FIG)
+    plot_topology_zoom(data, OUT_FIG_ZOOM)
 
 
 if __name__ == "__main__":
