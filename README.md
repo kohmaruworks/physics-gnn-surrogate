@@ -89,7 +89,9 @@ We simulate **two-dimensional incompressible flow** past a circular obstacle—t
 
 $$\partial_t \mathbf{u} + (\mathbf{u}\cdot\nabla)\mathbf{u} = -\rho^{-1}\nabla p + \nu \Delta \mathbf{u} + \mathbf{f}, \qquad \nabla\cdot \mathbf{u} = 0, \qquad \partial_t T + \nabla\cdot(T\mathbf{u}) = \alpha \Delta T$$
 
-**Discrete Exterior Calculus (DEC)** replaces the continuous operators ($\nabla$, $\Delta$, divergence) with metric-aware sparse operators on the simplicial mesh. **Decapodes.jl** assembles these operators diagrammatically into a semi-discrete ordinary differential equation, which **OrdinaryDiffEq.jl** integrates in time. *(Note: the executable momentum equation in `definitions.jl` employs a Stokes-type linearization $\partial_t \mathbf{u} \approx \nu \Delta \mathbf{u} - \rho^{-1}\nabla p$ together with an auxiliary pressure equation $\partial_t p = \kappa \Delta p$, coupled to advection–diffusion for $T$.)*
+**Discrete Exterior Calculus (DEC)** replaces the continuous operators ($\nabla$, $\Delta$, divergence) with metric-aware sparse operators on the simplicial mesh. **Decapodes.jl** assembles these operators diagrammatically into a semi-discrete ordinary differential equation, which **OrdinaryDiffEq.jl** integrates in time.
+
+> **Note.** The executable momentum equation in `definitions.jl` employs a Stokes-type linearization $\partial_t \mathbf{u} \approx \nu \Delta \mathbf{u} - \rho^{-1}\nabla p$ together with an auxiliary pressure equation $\partial_t p = \kappa \Delta p$, coupled to advection–diffusion for $T$.
 
 #### What Was Confirmed?
 
@@ -315,7 +317,9 @@ $$
 \partial_t \mathbf{u} + (\mathbf{u}\cdot\nabla)\mathbf{u} = -\rho^{-1}\nabla p + \nu \Delta \mathbf{u} + \mathbf{f}, \qquad \nabla\cdot \mathbf{u} = 0, \qquad \partial_t T + \nabla\cdot(T\mathbf{u}) = \alpha \Delta T
 $$
 
-**DEC（離散外微分）** は単体複体上で勾配・ラプラシアン・発散を離散化し、**Decapodes.jl** が合成した半離散系を **OrdinaryDiffEq.jl** が時間積分します。*（※実装上の `definitions.jl` では、モメンタムを対流なしの $\partial_t \mathbf{u} \approx \nu \Delta \mathbf{u} - \rho^{-1}\nabla p$ と $\partial_t p = \kappa \Delta p$ とし、$T$ は移流–拡散で結合させています。）*
+**DEC（離散外微分）** は単体複体上で勾配・ラプラシアン・発散を離散化し、**Decapodes.jl** が合成した半離散系を **OrdinaryDiffEq.jl** が時間積分します。
+
+> **注.** 実装上の `definitions.jl` では、モメンタムを対流なしの $\partial_t \mathbf{u} \approx \nu \Delta \mathbf{u} - \rho^{-1}\nabla p$ と $\partial_t p = \kappa \Delta p$ とし、$T$ は移流–拡散で結合させています。
 
 #### 検証・確認事項
 
