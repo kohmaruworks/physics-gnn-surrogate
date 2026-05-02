@@ -20,17 +20,17 @@ End-to-end flow from categorical physics definition in Julia to a physics-inform
 
 ```mermaid
 graph TD
-    subgraph Julia Environment [1. Physical Ground Truth (Julia)]
-        A[Decapodes.jl<br/>Categorical Physics Definition] --> B(CombinatorialSpaces.jl<br/>Simplicial Complex Mesh)
-        B --> C[OrdinaryDiffEq.jl<br/>CFD Simulation]
+    subgraph julia_gt["1. Physical Ground Truth (Julia)"]
+        A["Decapodes.jl<br/>Categorical Physics Definition"] --> B["CombinatorialSpaces.jl<br/>Simplicial Complex Mesh"]
+        B --> C["OrdinaryDiffEq.jl<br/>CFD Simulation"]
     end
-    subgraph JSON Contract [2. Data Handshake]
-        C -->|Export DEC Operators| D{JSON Contract V2<br/>Heterogeneous Graph<br/>0-based indices}
+    subgraph json_hs["2. Data Handshake"]
+        C -->|Export DEC Operators| D{"JSON Contract V2<br/>Heterogeneous Graph<br/>0-based indices"}
     end
-    subgraph Python Environment [3. AI Surrogate (Python/PyG)]
-        D -->|Ingest| E[PyTorch Geometric<br/>HeteroData]
-        E --> F[HeteroGNN<br/>with Physics-Informed Loss]
-        F --> G[Lightning-fast Inference<br/>~180,000x Speedup]
+    subgraph py_ai["3. AI Surrogate (Python/PyG)"]
+        D -->|Ingest| E["PyTorch Geometric<br/>HeteroData"]
+        E --> F["HeteroGNN<br/>with Physics-Informed Loss"]
+        F --> G["Lightning-fast Inference<br/>approx. 180,000x Speedup"]
     end
 ```
 
@@ -252,17 +252,17 @@ Julia における圏論的物理定義から、Python における物理情報�
 
 ```mermaid
 graph TD
-    subgraph Julia Environment [1. Physical Ground Truth (Julia)]
-        A[Decapodes.jl<br/>Categorical Physics Definition] --> B(CombinatorialSpaces.jl<br/>Simplicial Complex Mesh)
-        B --> C[OrdinaryDiffEq.jl<br/>CFD Simulation]
+    subgraph julia_gt["1. Physical Ground Truth (Julia)"]
+        A["Decapodes.jl<br/>Categorical Physics Definition"] --> B["CombinatorialSpaces.jl<br/>Simplicial Complex Mesh"]
+        B --> C["OrdinaryDiffEq.jl<br/>CFD Simulation"]
     end
-    subgraph JSON Contract [2. Data Handshake]
-        C -->|Export DEC Operators| D{JSON Contract V2<br/>Heterogeneous Graph<br/>0-based indices}
+    subgraph json_hs["2. Data Handshake"]
+        C -->|Export DEC Operators| D{"JSON Contract V2<br/>Heterogeneous Graph<br/>0-based indices"}
     end
-    subgraph Python Environment [3. AI Surrogate (Python/PyG)]
-        D -->|Ingest| E[PyTorch Geometric<br/>HeteroData]
-        E --> F[HeteroGNN<br/>with Physics-Informed Loss]
-        F --> G[Lightning-fast Inference<br/>~180,000x Speedup]
+    subgraph py_ai["3. AI Surrogate (Python/PyG)"]
+        D -->|Ingest| E["PyTorch Geometric<br/>HeteroData"]
+        E --> F["HeteroGNN<br/>with Physics-Informed Loss"]
+        F --> G["Lightning-fast Inference<br/>approx. 180,000x Speedup"]
     end
 ```
 
