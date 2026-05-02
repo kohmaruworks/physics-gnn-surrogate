@@ -311,7 +311,7 @@ categorical_physics_engine/
 
 2次元非圧縮性流体が円形障害物（シリンダー）の周りを流れる **シリンダー後流** シナリオです。物理法則は `Decapodes.jl` によるナビエ・ストークス方程式の **operadic合成**として厳密に定義し、`CombinatorialSpaces.jl` が生成する非構造単体複体上で時間発展を計算します。
 
-**支配方程式のスケッチ:** 領域を $\Omega \subset \mathbb{R}^2$ とし、速度を $\mathbf{u}$、圧力・密度・動粘性係数・温度・熱拡散率をそれぞれ $p,\rho,\nu,T,\alpha$、補助圧力方程式に現れる係数を $\kappa$ とする。このとき、非圧縮連成場の典型的な形は以下のようになる。
+**支配方程式のスケッチ:** 領域を $\Omega \subset \mathbb{R}^2$ とし、速度を $\mathbf{u}$、圧力・密度・動粘性係数・温度・熱拡散率をそれぞれ $p,\rho,\nu,T,\alpha$、補助圧力方程式に現れる係数を $\kappa$ とする。このとき、非圧縮連成場の典型的な形は以下のようになります。
 
 $$
 \partial_t \mathbf{u} + (\mathbf{u}\cdot\nabla)\mathbf{u} = -\rho^{-1}\nabla p + \nu \Delta \mathbf{u} + \mathbf{f}, \qquad \nabla\cdot \mathbf{u} = 0, \qquad \partial_t T + \nabla\cdot(T\mathbf{u}) = \alpha \Delta T
