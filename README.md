@@ -264,7 +264,7 @@ This project is released under the **MIT License**.
 
 ## アーキテクチャ
 
-Julia における圏論的物理定義から、Python における物理情報付きサロゲートまでの流れ:
+Julia における圏論的物理定義から、Python における物理情報付きサロゲートまでの流れは、次のとおりです。
 
 ```mermaid
 graph TD
@@ -331,7 +331,7 @@ categorical_physics_engine/
 
 #### シミュレーション対象
 
-2 次元非圧縮性流体が円形障害物（シリンダー）周りを流れる **シリンダー後流** シナリオ。物理は `Decapodes.jl` によるナビエ・ストークス方程式の **operadic 合成**として定義し、`CombinatorialSpaces.jl` が生成する非構造単体複体上で時間発展を計算します。
+2 次元非圧縮性流体が円形障害物（シリンダー）周りを流れる **シリンダー後流** シナリオです。物理は `Decapodes.jl` によるナビエ・ストークス方程式の **operadic 合成**として定義し、`CombinatorialSpaces.jl` が生成する非構造単体複体上で時間発展を計算します。
 
 **支配方程式のスケッチ。** 速度 $\mathbf{u}$、圧力 $p$、密度 $\rho$、動粘性係数 $\nu$、温度 $T$、熱拡散率 $\alpha$ として、$\Omega \subset \mathbb{R}^2$ 上の非圧縮連成場の典型形は
 
@@ -339,17 +339,17 @@ $$
 \partial_t \mathbf{u} + (\mathbf{u}\cdot\nabla)\mathbf{u} = -\rho^{-1}\nabla p + \nu \Delta \mathbf{u} + \mathbf{f}, \qquad \nabla\cdot \mathbf{u} = 0, \qquad \partial_t T + \nabla\cdot(T\mathbf{u}) = \alpha \Delta T
 $$
 
-である。**離散外微分（DEC）** は単体複体上で $\nabla$・$\Delta$・発散を計量に依存する疎行列に置き換え、**Decapodes.jl** がそれらをダイアグラムとして合成し、**OrdinaryDiffEq.jl** が半離散 ODE を時間積分する。*（実際に `definitions.jl` で実行されるモメンタムは対流項を含まないストークス型の線形化 $\partial_t \mathbf{u} \approx \nu \Delta \mathbf{u} - \rho^{-1}\nabla p$ と補助的な $\partial_t p = \kappa \Delta p$ に相当し、$T$ とは移流–拡散で結合する。）*
+です。**離散外微分（DEC）** は単体複体上で $\nabla$・$\Delta$・発散を計量に依存する疎行列に置き換え、**Decapodes.jl** がそれらをダイアグラムとして合成し、**OrdinaryDiffEq.jl** が半離散 ODE を時間積分します。*（実際に `definitions.jl` で実行されるモメンタムは、対流項を含まないストークス型の線形化 $\partial_t \mathbf{u} \approx \nu \Delta \mathbf{u} - \rho^{-1}\nabla p$ と補助的な $\partial_t p = \kappa \Delta p$ に相当し、$T$ とは移流–拡散で結合しています。）*
 
 #### 検証・確認事項
 
-1. **トポロジーの整合性** — シリンダーを内部境界として含む 2 次元単体複体が有効に生成され、空間ドメインへ正しく対応付けられることを確認。
+1. **トポロジーの整合性** — シリンダーを内部境界として含む 2 次元単体複体が有効に生成され、空間ドメインへ正しく対応付けられることを確認しました。
 
-2. **JSON コントラクトの正確性** — Julia から Python へ、ノード座標・三角形連結（**1 始まりから 0 始まりへの**安全な変換）・多次元物理場が欠損なく引き渡せることを確認（Python 側では Matplotlib `Triangulation` 等で復元）。
+2. **JSON コントラクトの正確性** — Julia から Python へ、ノード座標・三角形連結（**1 始まりから 0 始まりへの**安全な変換）・多次元物理場が欠損なく引き渡せることを確認しました（Python 側では Matplotlib `Triangulation` 等で復元できます）。
 
-3. **物理ソルバーの安定性** — 圏論的ダイアグラムから得た **DEC** オペレータが、境界条件下で安定した初期化と時間発展を与えることを確認。
+3. **物理ソルバーの安定性** — 圏論的ダイアグラムから得た **DEC** オペレータが、境界条件下で安定した初期化と時間発展を与えることを確認しました。
 
-ここまでの検証は、`multiphysics_dec_solver/step1_initial_physics_def/` で **`Pkg.instantiate()`** のあと **`julia --project=. src/main.jl`** を走らせることで再現できる（`src/main.jl` の **`Pkg.activate`** はこのディレクトリをプロジェクトルートとする）。既定の **`cylinder_wake`** では **`gensim` + OrdinaryDiffEq** で **`--t-end 1.2`**・格子 **`nx=36`**, **`ny=18`**・**`--frames 73`**・流体／熱係数を積み、**`data/raw/ground_truth_cylinder_wake.json`** と **`ground_truth_cylinder_wake.jld2`** を出力する（**1 始まり**トポロジと頂点代理場 **`velocity_vertex_vx`/`vy`**、**`pressure`**、**`temperature`**）。**`--scenario heat_sink`** に切り替えると **`ground_truth_heat_sink.json`** が得られる。Python 側では **`requirements_viz.txt`** を入れたうえで **`src/visualize_contract.py`** を実行し、**`zenn_assets/`** の GIF などを更新しつつ Matplotlib **`Triangulation`** でコントラクトの往復を確認する。手元で触るファイルは **`Project.toml`**、**`src/main.jl`**、**`src/visualize_contract.py`**、および **`data/raw/`** に蓄積される生成物である。
+ここまでの検証は、`multiphysics_dec_solver/step1_initial_physics_def/` で **`Pkg.instantiate()`** のあと **`julia --project=. src/main.jl`** を走らせることで再現できます（`src/main.jl` の **`Pkg.activate`** はこのディレクトリをプロジェクトルートとします）。既定の **`cylinder_wake`** では **`gensim` + OrdinaryDiffEq** で **`--t-end 1.2`**・格子 **`nx=36`**, **`ny=18`**・**`--frames 73`**・流体／熱係数を積み、**`data/raw/ground_truth_cylinder_wake.json`** と **`ground_truth_cylinder_wake.jld2`** を出力します（**1 始まり**トポロジと頂点代理場 **`velocity_vertex_vx`/`vy`**、**`pressure`**、**`temperature`**）。**`--scenario heat_sink`** に切り替えると **`ground_truth_heat_sink.json`** が得られます。Python 側では **`requirements_viz.txt`** を入れたうえで **`src/visualize_contract.py`** を実行し、**`zenn_assets/`** の GIF などを更新しつつ Matplotlib **`Triangulation`** でコントラクトの往復を確認できます。手元で触るファイルは **`Project.toml`**、**`src/main.jl`**、**`src/visualize_contract.py`**、および **`data/raw/`** に蓄積される生成物です。
 
 ### ステップ 2: ヘテロジニアストポロジーの抽出と JSON コントラクト V2
 
@@ -367,17 +367,17 @@ $$
 
 ### 🔬 抽出対象
 
-2 次元単体複体からの明示的なトポロジー関係の抽出。単一のエッジリストではなく、`CombinatorialSpaces.jl` の数学的定義に基づき、`primal_to_primal`（勾配・外微分）、`dual_to_dual`（流束）、`primal_to_dual`（ホッジスター演算）の各マッピングへと幾何学を分解しています。
+2 次元単体複体から明示的なトポロジー関係を抽出します。単一のエッジリストではなく、`CombinatorialSpaces.jl` の数学的定義に基づき、`primal_to_primal`（勾配・外微分）、`dual_to_dual`（流束）、`primal_to_dual`（ホッジスター演算）の各マッピングへと幾何学を分解しています。
 
 ### ✅ 検証・確認事項
 
-1. **数学的インデックスの忠実性** — 頂点と辺のマッピングの差異（例: 1997 個のプライマルエッジから 7883 個のデュアルエッジへのホッジマッピング）を、インデックスの範囲外エラーを起こすことなく完全に制御できていることを確認。
+1. **数学的インデックスの忠実性** — 頂点と辺のマッピングの差異（例: 1997 個のプライマルエッジから 7883 個のデュアルエッジへのホッジマッピング）を、インデックスの範囲外エラーを起こすことなく完全に制御できていることを確認しました。
 
-2. **0 始まりインデックスへの安全な変換** — Julia ネイティブの 1 始まりインデックスを、すべて 0 始まりインデックスへ安全に変換。ターミナルでのアサート検証により、すべてのソース／ターゲットインデックスが対応するテンソルサイズの範囲内に完全に収まっていることを数学的に証明。
+2. **0 始まりインデックスへの安全な変換** — Julia ネイティブの 1 始まりインデックスを、すべて 0 始まりインデックスへ安全に変換しました。ターミナルでのアサート検証により、すべてのソース／ターゲットインデックスが対応するテンソルサイズの範囲内に完全に収まっていることを数学的に証明しました。
 
-3. **PyG HeteroData への準備完了** — 出力された V2 JSON が、Python 側での重いデータ整形を一切必要とせず、PyTorch Geometric の `HeteroData` を即座にインスタンス化できるスキーマに厳密に準拠していることを確認。
+3. **PyG HeteroData への準備完了** — 出力された V2 JSON が、Python 側での重いデータ整形を一切必要とせず、PyTorch Geometric の `HeteroData` を即座にインスタンス化できるスキーマに厳密に準拠していることを確認しました。
 
-インデックス整合をそのまま JSON に載せる処理は **`multiphysics_dec_solver/step2_heterogeneous_contract/`** に集約されている。**`Pkg.instantiate()`**（複数行 **`using`** の末尾カンマ修正や **`has_subpart`** 分岐削除を含む）の後、**`export_hetero_json.jl`** が **ステップ 1** の **`TopologyBlocks1Based`** を **JLD2** から復元し（無ければ JSON）、**`glue_triangle!`** / **`orient!`** でプライマルを組み直し、**`EmbeddedDeltaDualComplex2D`** と **`subdivide_duals!(..., Barycenter())`** でデュアル複体を得る。**`primal_to_primal`**、**`dual_to_dual`**、**`elementary_duals`** に基づく **`primal_to_dual`** を COO で書き出す際は各添字を **−1** して **0 始まり**にし、**`dec_counts`** との **`@assert`** で整合を固定する。**`julia --project=. src/main.jl`** は **ステップ 1** の **`.jld2` を優先**して入力し、**t≈0.35** の断面を **`data/v2_contract/hetero_cylinder_wake_t0.35.json`** に落とす。Python の **`python src/test_hetero_load.py`**（**`requirements_test.txt`**）がターミナル監査と **`hetero_topology.png`** / **`hetero_topology_zoom.png`** を担当する。*（Julia ≥1.11:* **`SparseArrays`** を **`[deps]` に固定しない**と **`instantiate`** が衝突するため、疎行列は **`CombinatorialSpaces`** 経由の依存に任せる。）主要パスは **`Project.toml`**、**`src/main.jl`**、**`src/export_hetero_json.jl`**、**`src/test_hetero_load.py`**、**`requirements_test.txt`**、**`data/v2_contract/`** である。
+インデックス整合をそのまま JSON に載せる処理は **`multiphysics_dec_solver/step2_heterogeneous_contract/`** に集約されています。**`Pkg.instantiate()`**（複数行 **`using`** の末尾カンマ修正や **`has_subpart`** 分岐削除を含む）の後、**`export_hetero_json.jl`** が **ステップ 1** の **`TopologyBlocks1Based`** を **JLD2** から復元し（無ければ JSON）、**`glue_triangle!`** / **`orient!`** でプライマルを組み直し、**`EmbeddedDeltaDualComplex2D`** と **`subdivide_duals!(..., Barycenter())`** でデュアル複体を得ます。**`primal_to_primal`**、**`dual_to_dual`**、**`elementary_duals`** に基づく **`primal_to_dual`** を COO で書き出す際は各添字を **−1** して **0 始まり**にし、**`dec_counts`** との **`@assert`** で整合を固定します。**`julia --project=. src/main.jl`** は **ステップ 1** の **`.jld2` を優先**して入力し、**t≈0.35** の断面を **`data/v2_contract/hetero_cylinder_wake_t0.35.json`** に落とします。Python の **`python src/test_hetero_load.py`**（**`requirements_test.txt`**）がターミナル監査と **`hetero_topology.png`** / **`hetero_topology_zoom.png`** を担当します。*（Julia ≥1.11:* **`SparseArrays`** を **`[deps]` に固定しない**と **`instantiate`** が衝突するため、疎行列は **`CombinatorialSpaces`** 経由の依存に任せます。）主要パスは **`Project.toml`**、**`src/main.jl`**、**`src/export_hetero_json.jl`**、**`src/test_hetero_load.py`**、**`requirements_test.txt`**、**`data/v2_contract/`** です。
 
 ### ステップ 3: PyG における HeteroData の読み込みと特徴量監査
 
@@ -387,29 +387,29 @@ $$
 
 ![PyG 部分グラフのトポロジー](./multiphysics_dec_solver/step3_pyg_heterodata_loading/zenn_assets/pyg_subgraph_topology.png)
 
-*（注: プライマル／デュアル／辺中点ノードが `p2p`, `d2d`, `p2d` メタパスで接続される様子を示す、最大 3 ホップのエゴグラフ。）*
+*（注: プライマル／デュアル／辺中点ノードが `p2p`, `d2d`, `p2d` メタパスで接続される様子を示す、最大 3 ホップのエゴグラフです。）*
 
 ![PyG 特徴量の分布](./multiphysics_dec_solver/step3_pyg_heterodata_loading/zenn_assets/pyg_feature_distributions.png)
 
 ### 🔬 入力と可視化の対象
 
-V2 JSON コントラクトを PyTorch Geometric の `HeteroData` オブジェクトとしてインスタンス化する。DEC に特有の複雑な辺対辺マッピング（ホッジスター演算など）を扱うため、各辺の中点を独立したノードとして持ち上げる（線グラフに近い構成）。これにより、PyG 上で幾何学的に異なる種類のノード間でもメッセージパッシングを素直に実行できる。
+V2 JSON コントラクトを PyTorch Geometric の `HeteroData` オブジェクトとしてインスタンス化します。DEC に特有の複雑な辺対辺マッピング（ホッジスター演算など）を扱うため、各辺の中点を独立したノードとして持ち上げます（線グラフに近い構成です）。これにより、PyG 上で幾何学的に異なる種類のノード間でもメッセージパッシングを素直に実行できます。
 
 ### ✅ 検証・確認事項
 
-1. **トポロジー構造の検証** — 部分グラフを抽出し、プライマル頂点、デュアル頂点、および辺中点ノードが、`p2p`, `d2d`, `p2d` のメタパスを通じてインデックスの衝突なく正確に結合されていることを視覚的に確認した。
+1. **トポロジー構造の検証** — 部分グラフを抽出し、プライマル頂点、デュアル頂点、および辺中点ノードが、`p2p`, `d2d`, `p2d` のメタパスを通じてインデックスの衝突なく正確に結合されていることを視覚的に確認しました。
 
-2. **データ監査と健全性チェック** — すべての特徴量および座標テンソルに `NaN` や `Inf` が含まれていないこと、正しい型（特徴量は `float32`、インデックスは `long`）にキャストされていることをアサートで証明した。
+2. **データ監査と健全性チェック** — すべての特徴量および座標テンソルに `NaN` や `Inf` が含まれていないこと、正しい型（特徴量は `float32`、インデックスは `long`）にキャストされていることをアサートで証明しました。
 
-3. **AI 学習への準備完了** — 特徴量の分布ヒストグラムにより、物理変数（流速、圧力など）がニューラルネットワークの学習に適したスケールであり、標準化への準備が整っていることを実証した。
+3. **AI 学習への準備完了** — 特徴量の分布ヒストグラムにより、物理変数（流速、圧力など）がニューラルネットワークの学習に適したスケールであり、標準化への準備が整っていることを実証しました。
 
-**`multiphysics_dec_solver/step3_pyg_heterodata_loading/`** に **`requirements_step3.txt`** を入れたうえで、**`hetero_dataset.load_v2_hetero_json`** が **ステップ 2** の V2 JSON（既定 **`../step2_heterogeneous_contract/data/v2_contract/hetero_cylinder_wake_t0.35.json`**）を読み込み、辺中点ノードを連結した **`HeteroData`**（**`float32`** の **`x`**/**`pos`**、**`long`** の **`edge_index`**）を構築し、入力 JSON のパスもオブジェクトに保持する。**`save_hetero_pt`** が **`data/processed/hetero_cylinder_wake_t0.35.pt`** と **`HeteroV2Meta`** を書き出したあと、**`python src/test_audit.py`**（JSON は第 1 引数で上書き可）と **`python src/visualize_pyg.py`** が続く。可視化側は PyTorch 2.6 以降向けに **`torch.load(..., map_location="cpu", weights_only=False)`** を使い、**`pyg_subgraph_topology.png`** と **`pyg_feature_distributions.png`** を **`zenn_assets/`** に出力する。
+**`multiphysics_dec_solver/step3_pyg_heterodata_loading/`** に **`requirements_step3.txt`** を入れたうえで、**`hetero_dataset.load_v2_hetero_json`** が **ステップ 2** の V2 JSON（既定 **`../step2_heterogeneous_contract/data/v2_contract/hetero_cylinder_wake_t0.35.json`**）を読み込み、辺中点ノードを連結した **`HeteroData`**（**`float32`** の **`x`**/**`pos`**、**`long`** の **`edge_index`**）を構築し、入力 JSON のパスもオブジェクトに保持します。**`save_hetero_pt`** が **`data/processed/hetero_cylinder_wake_t0.35.pt`** と **`HeteroV2Meta`** を書き出したあと、**`python src/test_audit.py`**（JSON は第 1 引数で上書き可）と **`python src/visualize_pyg.py`** が続きます。可視化側は PyTorch 2.6 以降向けに **`torch.load(..., map_location="cpu", weights_only=False)`** を使い、**`pyg_subgraph_topology.png`** と **`pyg_feature_distributions.png`** を **`zenn_assets/`** に出力します。
 
-これらは先に述べた監査内容と矛盾しないように組まれている。**`load_v2_hetero_json`** はプライマル特徴長と **`num_nodes`** の不一致、**`edge_index`** が **`[2, E]`** でない場合、**`dec_counts`** と辺中点再構成の食い違いに **`ValueError`** を投げ、トポロジーが黙って崩れるのを防ぐ。**`test_audit`** は **`x`**/**`pos`** の有限性・各メタパスの dtype／形状・**`p2p`**/**`d2d`** がプライマル／デュアルの頂点ブロックのみを指すこと・**`p2d`** が辺中点ブロックのみを指すことを **assert** し、範囲外やパーティション衝突を早期に検知する。**`visualize_pyg`** は **`.pt`** 欠落時に **`FileNotFoundError`** を返し、統合グラフで **`('primal', 0)`** が孤立しているときは**幾何重心に最も近いプライマル頂点**へフォールバックして空のエゴグラフを避ける。CPU 推奨なら **`pip install torch --index-url https://download.pytorch.org/whl/cpu`** のうえ **`python src/test_audit.py`** のあと **`python src/visualize_pyg.py`** とするとよい。関連ファイルは **`requirements_step3.txt`**、**`src/hetero_dataset.py`**、**`src/test_audit.py`**、**`src/visualize_pyg.py`**、**`data/processed/*.pt`** である。
+これらは先に述べた監査内容と矛盾しないように組まれています。**`load_v2_hetero_json`** はプライマル特徴長と **`num_nodes`** の不一致、**`edge_index`** が **`[2, E]`** でない場合、**`dec_counts`** と辺中点再構成の食い違いに **`ValueError`** を投げ、トポロジーが黙って崩れるのを防ぎます。**`test_audit`** は **`x`**/**`pos`** の有限性・各メタパスの dtype／形状・**`p2p`**/**`d2d`** がプライマル／デュアルの頂点ブロックのみを指すこと・**`p2d`** が辺中点ブロックのみを指すことを **assert** し、範囲外やパーティション衝突を早期に検知します。**`visualize_pyg`** は **`.pt`** 欠落時に **`FileNotFoundError`** を返し、統合グラフで **`('primal', 0)`** が孤立しているときは**幾何重心に最も近いプライマル頂点**へフォールバックして空のエゴグラフを避けます。CPU を使う場合は、**`pip install torch --index-url https://download.pytorch.org/whl/cpu`** を実行したうえで、**`python src/test_audit.py`** のあと **`python src/visualize_pyg.py`** とするのが無難です。関連ファイルは **`requirements_step3.txt`**、**`src/hetero_dataset.py`**、**`src/test_audit.py`**、**`src/visualize_pyg.py`**、**`data/processed/*.pt`** です。
 
 ### ステップ 4: HeteroGNN アーキテクチャと Physics-Informed 学習
 
-上流で得られた圏論的ヘテロジニアス構造を入力として、**物理情報付き損失**を備えた **ヘテロジニアス GNN** で物理ダイナミクスを直接学習するディープラーニング中核を確立する段階である。**`HeteroConv`** と **`GraphConv`** でプライマル／デュアルごとのメッセージパッシングを構成し、**`d2p`** でプライマル–デュアルを双方向に接続する。プライマル **`x`** の再構成 **MSE** に、流体頂点上のグラフ勾配に基づく **擬似発散（質量保存に寄せた）ペナルティ**を載せ、PyG 上で本格的な **DEC** 疎行列が揃うまでの代理として機能させる。
+上流で得られた圏論的ヘテロジニアス構造を入力として、**物理情報付き損失**を備えた **ヘテロジニアス GNN** で物理ダイナミクスを直接学習するディープラーニング中核を確立する段階です。**`HeteroConv`** と **`GraphConv`** でプライマル／デュアルごとのメッセージパッシングを構成し、**`d2p`** でプライマル–デュアルを双方向に接続します。プライマル **`x`** の再構成 **MSE** に、流体頂点上のグラフ勾配に基づく **擬似発散（質量保存に寄せた）ペナルティ**を載せ、PyG 上で本格的な **DEC** 疎行列が揃うまでの代理として機能させます。
 
 **損失のスケッチ。** 予測プライマル特徴を $\hat{\mathbf{x}}$、教師を $\mathbf{x}^{*}$ とし、流体頂点のみが載る **`p2p`** の辺 $(i,j)$ と速度チャネル $(u,v)$ について、
 
@@ -419,7 +419,7 @@ $$
 \mathcal{L} = \mathcal{L}_{\mathrm{data}} + \lambda\,\mathcal{L}_{\mathrm{phys}},
 $$
 
-とおく（$\hat{\mathbf{u}}=(\hat{u},\hat{v})$、$b_k$ は頂点 $k$ に集約した増分の正規化近似）。実装は **`physics_loss.py`** の **`pseudo_divergence_loss`**。コタンジェント重み付き DEC の厳密発散ではなく、$\nabla\!\cdot\mathbf{u}\approx 0$ への便宜的な代理である。
+とおきます（$\hat{\mathbf{u}}=(\hat{u},\hat{v})$、$b_k$ は頂点 $k$ に集約した増分の正規化近似です）。実装は **`physics_loss.py`** の **`pseudo_divergence_loss`** です。コタンジェント重み付き DEC の厳密発散ではなく、$\nabla\!\cdot\mathbf{u}\approx 0$ への便宜的な代理です。
 
 **離散形（実装との対応）。** フィルタ後の **`p2p`** 頂点辺 $i\to j$ の集合を $\mathcal{E}$ とし、
 
@@ -435,53 +435,53 @@ $$
 \mathcal{L}_{\mathrm{phys}} = \mathcal{L}_{\mathrm{grad}} + \mathcal{L}_{\mathrm{bal}},
 $$
 
-ここで $N$ は損失に渡すプライマル頂点数である（$d_j=0$ の頂点では $b_j=0$）。
+ここで $N$ は損失に渡すプライマル頂点数です（$d_j=0$ の頂点では $b_j=0$ です）。
 
 #### 可視化: 空間推論の比較
 
 ![GNN 推論の比較](./multiphysics_dec_solver/step4_hetero_gnn_training/zenn_assets/gnn_inference_comparison.png)
 
-*（注: プライマル流体頂点における速度の大きさについて、グラウンドトゥルース・GNN 予測・絶対誤差を空間マッピングしたもの。学習済み順伝播パイプラインの妥当性を確認する。）*
+*（注: プライマル流体頂点における速度の大きさについて、グラウンドトゥルース・GNN 予測・絶対誤差を空間マッピングしたものです。学習済み順伝播パイプラインの妥当性を確認します。）*
 
 ### 🔬 シミュレーションと可視化の対象
 
-学習済み **HeteroGNN** の**空間推論**である。モデルは **ステップ 3** のヘテロジニアスグラフ特徴を入力とし、プライマルおよびデュアル複体上で **`HeteroConv`** によるメッセージパッシングを行う。出力を **`primal.pos`** に対応付けて散布し、Julia が生成したグラウンドトゥルースと予測速度場を視覚的に比較する。
+学習済み **HeteroGNN** の**空間推論**です。モデルは **ステップ 3** のヘテロジニアスグラフ特徴を入力とし、プライマルおよびデュアル複体上で **`HeteroConv`** によるメッセージパッシングを行います。出力を **`primal.pos`** に対応付けて散布し、Julia が生成したグラウンドトゥルースと予測速度場を視覚的に比較します。
 
 ### ✅ 検証・確認事項
 
-1. **アーキテクチャの妥当性** — **`HeteroConv`** が、根本的に異なるトポロジー・エンティティ間（**`p2p`**、**`d2d`**、**`p2d`**、逆向きの **`d2p`**）でメッセージを次元不一致なくルーティング・集約できることを確認した。
-2. **物理情報付きパイプラインの稼働** — グラフ勾配に基づくカスタム **擬似発散損失**を統合し、バックワードが PyG のグラフ構造上で質量保存（発散ゼロに寄せた）制約のペナルティを **MSE** とともに学習できることを確認した。
-3. **エンドツーエンド・パイプラインの完成** — 可視化により、Julia 側の数学的定義から **Python** 側のニューラルネット推論・誤差マッピングまで、データが途切れず流れることを確認した。
+1. **アーキテクチャの妥当性** — **`HeteroConv`** が、根本的に異なるトポロジー・エンティティ間（**`p2p`**、**`d2d`**、**`p2d`**、逆向きの **`d2p`**）でメッセージを次元不一致なくルーティング・集約できることを確認しました。
+2. **物理情報付きパイプラインの稼働** — グラフ勾配に基づくカスタム **擬似発散損失**を統合し、バックワードが PyG のグラフ構造上で質量保存（発散ゼロに寄せた）制約のペナルティを **MSE** とともに学習できることを確認しました。
+3. **エンドツーエンド・パイプラインの完成** — 可視化により、Julia 側の数学的定義から **Python** 側のニューラルネット推論・誤差マッピングまで、データが途切れず流れることを確認しました。
 
-学習自体は **`multiphysics_dec_solver/step4_hetero_gnn_training/`** で行う。**`requirements_step4.txt`**（CPU PyTorch のヒント、**`torch-geometric`**、**`tqdm`**、**`tensorboard`**、**`matplotlib`**）を入れたうえで **`python src/train.py`** を実行する。**`src/model.py`** の **`PhysicsInformedHeteroGNN`** が **`HeteroConv`** + **`GraphConv`** とプライマル **`Linear`**（**`primal.x`** の幅に合わせる）を束ね、**`physics_loss.py`** が流体 **`p2p`** にフィルタした **MSE + λ × 擬似発散損失**を返す。**`train.py`** は **`../step3_pyg_heterodata_loading/data/processed/hetero_cylinder_wake_t0.35.pt`** を読み、pickle のために **`step3_pyg_heterodata_loading/src`** を **`sys.path`** 先頭へ足し、単一グラフのプライマル **`x`** 自己符号化を **`tqdm`**（合計／データ／物理）付きで進め、TensorBoard **`runs/step4_hetero_gnn/`** と **`checkpoints/hetero_gnn_model.pth`** に記録する。その結果を **`python src/visualize_inference.py`** が **`eval()`**・**`torch.no_grad()`** で平面散布し、速度の大きさ（**`x`** の先頭 2 チャネル）から **`zenn_assets/gnn_inference_comparison.png`**（**1×3**、**`turbo` / `Reds`**、**15×4・300 DPI**）を出力して、直前まで確認した空間推論と視覚的に接続する。リポジトリ上の主ファイルは **`requirements_step4.txt`**、**`src/model.py`**、**`src/physics_loss.py`**、**`src/train.py`**、**`src/visualize_inference.py`**、**`checkpoints/`**、**`zenn_assets/`** である。
+学習自体は **`multiphysics_dec_solver/step4_hetero_gnn_training/`** で行います。**`requirements_step4.txt`**（CPU PyTorch のヒント、**`torch-geometric`**、**`tqdm`**、**`tensorboard`**、**`matplotlib`**）を入れたうえで **`python src/train.py`** を実行します。**`src/model.py`** の **`PhysicsInformedHeteroGNN`** が **`HeteroConv`** + **`GraphConv`** とプライマル **`Linear`**（**`primal.x`** の幅に合わせる）を束ね、**`physics_loss.py`** が流体 **`p2p`** にフィルタした **MSE + λ × 擬似発散損失**を返します。**`train.py`** は **`../step3_pyg_heterodata_loading/data/processed/hetero_cylinder_wake_t0.35.pt`** を読み、pickle のために **`step3_pyg_heterodata_loading/src`** を **`sys.path`** 先頭へ足し、単一グラフのプライマル **`x`** 自己符号化を **`tqdm`**（合計／データ／物理）付きで進め、TensorBoard **`runs/step4_hetero_gnn/`** と **`checkpoints/hetero_gnn_model.pth`** に記録します。その結果を **`python src/visualize_inference.py`** が **`eval()`**・**`torch.no_grad()`** で平面散布し、速度の大きさ（**`x`** の先頭 2 チャネル）から **`zenn_assets/gnn_inference_comparison.png`**（**1×3**、**`turbo` / `Reds`**、**15×4・300 DPI**）を出力して、直前まで確認した空間推論と視覚的に接続します。リポジトリ上の主ファイルは **`requirements_step4.txt`**、**`src/model.py`**、**`src/physics_loss.py`**、**`src/train.py`**、**`src/visualize_inference.py`**、**`checkpoints/`**、**`zenn_assets/`** です。
 
 ### ステップ 5: ゼロショット汎化とパフォーマンスベンチマーク
 
-未知のメッシュに対する **トポロジカルな汎化性能**（**ゼロショット推論**）を評価する。チェックポイントと **プライマル／デュアルの特徴次元が一致する**任意の **`HeteroData`** **`.pt`** を読み込み、再構成誤差を計測する。また **厳密なパフォーマンスベンチマーク** で計算コスト対効果（**ROI**）を定量化し、**物理的精度**（**MSE**／**MAE**）を維持したまま **従来の CFD ソルバー** に対して **GNN サロゲート** が **圧倒的な高速化**を実現することを示す。
+未知のメッシュに対する **トポロジカルな汎化性能**（**ゼロショット推論**）を評価します。チェックポイントと **プライマル／デュアルの特徴次元が一致する**任意の **`HeteroData`** **`.pt`** を読み込み、再構成誤差を計測します。また **厳密なパフォーマンスベンチマーク** で計算コスト対効果（**ROI**）を定量化し、**物理的精度**（**MSE**／**MAE**）を維持したまま **従来の CFD ソルバー** に対して **GNN サロゲート**が **圧倒的な高速化**を実現することを示します。
 
 #### 可視化: ゼロショット空間比較
 
 ![ゼロショット空間比較（速度の大きさ）](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/zeroshot_comparison.png)
 
-*（注: 評価対象のグラフとチェックポイントの組み合わせについて、プライマル流体頂点の速度の大きさ—グラウンドトゥルース・予測・絶対誤差—を散布で示したもの。）*
+*（注: 評価対象のグラフとチェックポイントの組み合わせについて、プライマル流体頂点の速度の大きさ—グラウンドトゥルース・予測・絶対誤差—を散布で示したものです。）*
 
 ### 🔬 評価の対象
 
-**`evaluate_generalization.py`** が **`--data-path`** と **`--model-path`** を受け取り、**`eval()`** で推論し、**全プライマルノードの `x`** について **MSE** と **MAE** をターミナルに出力する。**ステップ 4** と同様の **1×3** 散布比較を **`evaluation_results/zeroshot_comparison.png`** に保存する。**`benchmark_speed.py`** は **10** 回のウォームアップ後、**100** 回の順伝播を **`time.perf_counter`** で計測（CUDA 利用時は同期）、平均・標準偏差・最小・最大を **ミリ秒** で **`tabulate`** 表示する。
+**`evaluate_generalization.py`** が **`--data-path`** と **`--model-path`** を受け取り、**`eval()`** で推論し、**全プライマルノードの `x`** について **MSE** と **MAE** をターミナルに出力します。**ステップ 4** と同様の **1×3** 散布比較を **`evaluation_results/zeroshot_comparison.png`** に保存します。**`benchmark_speed.py`** は **10** 回のウォームアップ後、**100** 回の順伝播を **`time.perf_counter`** で計測します（CUDA 利用時は同期し）、平均・標準偏差・最小・最大を **ミリ秒** で **`tabulate`** 表示します。
 
 ### ✅ 検証・確認事項
 
-1. **推論の移植性** — チャネル幅が一致する **ステップ 3 形式の `.pt`** であれば、**`PhysicsInformedHeteroGNN`** を追加訓練なしで実行できる。
-2. **精度の定量化** — **MSE**／**MAE** でプライマル場の再構成を要約し、空間誤差パネルで分布を確認できる。
-3. **速度の定量化** — 繰り返しベンチマークで、対話的用途や外側ループに見合う **ミリ秒級** のレイテンシを記録できる。
+1. **推論の移植性** — チャネル幅が一致する **ステップ 3 形式の `.pt`** であれば、**`PhysicsInformedHeteroGNN`** を追加訓練なしで実行できます。
+2. **精度の定量化** — **MSE**／**MAE** でプライマル場の再構成を要約し、空間誤差パネルで分布を確認できます。
+3. **速度の定量化** — 繰り返しベンチマークで、対話的用途や外側ループに見合う **ミリ秒級** のレイテンシを記録できます。
 
-ゼロショット評価とベンチマークは **`multiphysics_dec_solver/step5_zero_shot_evaluation/`** にまとまっている。**`pip install -r requirements_step5.txt`**（PyTorch、PyTorch Geometric、Matplotlib、NumPy、**`tabulate`**、CPU ホイールのヒント）の後、**`python src/evaluate_generalization.py`** が **`--data-path`** と **`--model-path`** を受け取り **`eval()`** で推論し、全プライマル **`x`** の **MSE**／**MAE** を表示して **`evaluation_results/zeroshot_comparison.png`**（ステップ 4 と同型の **1×3** 散布）へ書き出す。**`python src/benchmark_speed.py`** はウォームアップ **10** 回のあと計測対象 **100** 回の順伝播を **`time.perf_counter`** で取り（CUDA 時は同期）、**`tabulate`** で **ms** 集計する。いずれもモデルと **`HeteroData`** の unpickle のために **`step4_hetero_gnn_training/src`** と **`step3_pyg_heterodata_loading/src`** を **`sys.path`** に差し込む。任意で **`python src/visualize_benchmark_chart.py`** を走らせると **`evaluation_results/roi_speedup_benchmark.png`**（**300** DPI・対数 **y**）が更新され、ファイル先頭の **`TRADITIONAL_CFD_SECONDS`** と **`GNN_INFERENCE_SECONDS`** を、想定 CFD 時間や **`benchmark_speed.py`** の平均に合わせて調整できるので、先に確認した精度指標と ROI を一文脈で語れる。既定コマンドはシリンダー後流 **`.pt`** とステップ 4 の **`.pth`** でリグレッションするだけだが、未知メッシュなら互換の **`.pt`** を渡せばよい。
+ゼロショット評価とベンチマークは **`multiphysics_dec_solver/step5_zero_shot_evaluation/`** にまとまっています。**`pip install -r requirements_step5.txt`**（PyTorch、PyTorch Geometric、Matplotlib、NumPy、**`tabulate`**、CPU ホイールのヒント）の後、**`python src/evaluate_generalization.py`** が **`--data-path`** と **`--model-path`** を受け取り **`eval()`** で推論し、全プライマル **`x`** の **MSE**／**MAE** を表示して **`evaluation_results/zeroshot_comparison.png`**（ステップ 4 と同型の **1×3** 散布）へ書き出します。**`python src/benchmark_speed.py`** はウォームアップ **10** 回のあと計測対象 **100** 回の順伝播を **`time.perf_counter`** で取り（CUDA 時は同期）、**`tabulate`** で **ms** 集計します。いずれもモデルと **`HeteroData`** の unpickle のために **`step4_hetero_gnn_training/src`** と **`step3_pyg_heterodata_loading/src`** を **`sys.path`** に差し込みます。任意で **`python src/visualize_benchmark_chart.py`** を走らせると **`evaluation_results/roi_speedup_benchmark.png`**（**300** DPI・対数 **y**）が更新され、ファイル先頭の **`TRADITIONAL_CFD_SECONDS`** と **`GNN_INFERENCE_SECONDS`** を、想定 CFD 時間や **`benchmark_speed.py`** の平均に合わせて調整できるので、先に確認した精度指標と ROI を一文脈で語れます。既定コマンドはシリンダー後流 **`.pt`** とステップ 4 の **`.pth`** でリグレッションするだけですが、未知メッシュなら互換の **`.pt`** を渡せばよいです。
 
 #### 可視化: ROI 推論高速化（代表的ベンチマーク）
 
 ![ROI 推論高速化ベンチマーク](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/roi_speedup_benchmark.png)
 
-対数スケールの棒グラフで、代表的な **Julia/DEC CFD** の計算時間と **HeteroGNN サロゲート**の推論時間（いずれも**秒**）を比較し、**数万倍規模の圧倒的な高速化（ROI）**を視覚化する。数値は **`src/visualize_benchmark_chart.py`** 上部の定数で実測・想定に合わせて差し替え可能。
+対数スケールの棒グラフで、代表的な **Julia/DEC CFD** の計算時間と **HeteroGNN サロゲート**の推論時間（いずれも**秒**）を比較し、**数万倍規模の圧倒的な高速化（ROI）**を視覚化します。数値は **`src/visualize_benchmark_chart.py`** 上部の定数で実測・想定に合わせて差し替え可能です。
 
 ## ライセンス
 
