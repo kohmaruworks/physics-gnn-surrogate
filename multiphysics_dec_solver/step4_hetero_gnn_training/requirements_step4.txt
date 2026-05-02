@@ -1,0 +1,8 @@
+# CPU-first installs small wheels on Linux without NVIDIA CUDA stacks.
+# For CUDA builds, remove this line and install PyTorch per pytorch.org.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.0
+torch-geometric>=2.4
+tqdm>=4.65
+tensorboard>=2.14
+matplotlib>=3.7

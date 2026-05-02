@@ -1,2 +1,0 @@
-# 定義はリポジトリルートの requirements.txt に集約（このファイルは互換用エントリポイント）
--r ../../requirements.txt

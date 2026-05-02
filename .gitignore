@@ -1,46 +1,12 @@
-# ドキュメント: Julia セットアップのみ追跡（その他の docs はローカル）
-docs/*
-!docs/julia_setup.md
+# Julia
+Manifest.toml
+*.jl.cov
+*.jl.mem
 
-# --- データ・学習成果物（再現は README の手順から。秘密・巨大ファイルを避ける） ---
-data/interim/*
-!data/interim/.gitkeep
-data/raw/*
-!data/raw/.gitkeep
-
-# バックアップ・一時
-*.json~
-*.tmp
-*.log
-
-# --- シークレット・認証（誤コミット防止） ---
-.env
-.env.*
-!.env.example
-*.pem
-*.key
-*credentials*.json
-secrets/
-
-# --- Python ---
-.venv/
-venv/
+# Python
 __pycache__/
 *.py[cod]
-*$py.class
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
 
-# --- Julia ---
-*.jl.cov
-*.jl.*.mem
-
-# --- OS・エディタ ---
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/
-*.swp
-*~
-.cursor/
+# Outputs
+**/data/raw/*.json
+**/data/raw/*.jld2
