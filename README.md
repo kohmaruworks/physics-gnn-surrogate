@@ -103,17 +103,7 @@ This visualization serves as the proof of concept for our architecture:
 
 3. **Physical Solver Stability** — Confirmed that **Discrete Exterior Calculus (DEC)** operators derived from the categorical diagrams yield stable initialization and physically consistent temporal evolution under the prescribed boundary setup.
 
-### ▶ What was executed
-
-- **Julia env:** From `multiphysics_dec_solver/step1_initial_physics_def/`, activate the project (`Pkg.activate` from `src/main.jl` uses root `step1_initial_physics_def/`) and run **`Pkg.instantiate()`**.
-- **Ground truth:** **`julia --project=. src/main.jl`** — defaults **`cylinder_wake`**, **`--t-end 1.2`**, **`nx=36`**, **`ny=18`**, **`--frames 73`**, fluid `ν`/`ρ` and coupled thermal coefficients; **`gensim` + `OrdinaryDiffEq`** integration.
-- **Outputs:** **`data/raw/ground_truth_cylinder_wake.json`** and **`ground_truth_cylinder_wake.jld2`** (**1-based** topology; vertex proxies `velocity_vertex_vx/vy`, `pressure`, `temperature`).
-- **Alternate scenario:** **`--scenario heat_sink`** → **`ground_truth_heat_sink.json`**.
-- **Python viz:** Install **`requirements_viz.txt`**, run **`src/visualize_contract.py`** to refresh **`zenn_assets/`** (e.g. **`cylinder_wake_animation.gif`**) and validate Matplotlib **`Triangulation`**.
-
-**Code entrypoint:** `multiphysics_dec_solver/step1_initial_physics_def/`
-
-- `Project.toml`, `src/main.jl`, `src/visualize_contract.py`, `data/raw/`
+To reproduce those checks, work from **`multiphysics_dec_solver/step1_initial_physics_def/`**, where **`src/main.jl`** activates that folder as the Julia project root: run **`Pkg.instantiate()`**, then **`julia --project=. src/main.jl`**. The default **`cylinder_wake`** run integrates with **`gensim` + OrdinaryDiffEq** (`--t-end 1.2`, **`nx=36`**, **`ny=18`**, **`--frames 73`**, fluid ν/ρ and thermal coupling) and writes **`data/raw/ground_truth_cylinder_wake.json`** plus **`ground_truth_cylinder_wake.jld2`**—**1-based** topology with vertex-proxy fields **`velocity_vertex_vx`/`vy`**, **`pressure`**, and **`temperature`**. **`--scenario heat_sink`** swaps in **`ground_truth_heat_sink.json`**. On the Python side, **`requirements_viz.txt`** and **`src/visualize_contract.py`** regenerate artifacts under **`zenn_assets/`** (for example **`cylinder_wake_animation.gif`**) and confirm the JSON round-trip with Matplotlib **`Triangulation`**. The usual entry files are **`Project.toml`**, **`src/main.jl`**, **`src/visualize_contract.py`**, and outputs under **`data/raw/`**.
 
 ### Step 2: Heterogeneous Topology Extraction & JSON Contract V2
 
@@ -141,18 +131,7 @@ Explicit topological relationships from the 2D simplicial complex. Instead of a 
 
 3. **Ready for PyG HeteroData** — The exported V2 JSON strictly follows the schema required to instantiate PyTorch Geometric’s `HeteroData` without requiring any heavy data-wrangling on the Python side.
 
-### ▶ What was executed
-
-- **Julia project:** `multiphysics_dec_solver/step2_heterogeneous_contract/` — `Project.toml` / `Manifest.toml`, `CombinatorialSpaces`, `JSON3`, `JLD2`, `GeometryBasics`.
-- **Export:** `export_hetero_json.jl` mirrors **`TopologyBlocks1Based`** for **`JLD2`** reload; falls back to **JSON** if `.jld2` is missing; rebuilds primal with `glue_triangle!` / `orient!` and **`EmbeddedDeltaDualComplex2D{Bool,Float64,Point3}`** + **`subdivide_duals!(..., Barycenter())`** (same path as Step 1).
-- **Topology COO:** Writes `primal_to_primal`, `dual_to_dual`, `elementary_duals`-based `primal_to_dual`; **−1** for **0-based** JSON; **`@assert`** vs `dec_counts`.
-- **Workflow:** **`Pkg.instantiate()`** (fix trailing commas in multi-line `using`; drop fragile `has_subpart` guard). **`julia --project=. src/main.jl`** → **`data/v2_contract/hetero_cylinder_wake_t0.35.json`** (nearest **t ≈ 0.35**; prefers Step 1 **`.jld2`**).
-- **Python audit / figures:** **`python src/test_hetero_load.py`** (`requirements_test.txt`) — terminal checks, **`zenn_assets/hetero_topology.png`**, and **`zenn_assets/hetero_topology_zoom.png`** (central zoom).
-- **Note (Julia ≥1.11):** **`SparseArrays`** omitted from `[deps]` (stdlib/registry clash on **`instantiate`**); sparse remains **transitive** via **`CombinatorialSpaces`**.
-
-**Code entrypoint:** `multiphysics_dec_solver/step2_heterogeneous_contract/`
-
-- `Project.toml`, `src/main.jl`, `src/export_hetero_json.jl`, `src/test_hetero_load.py`, `requirements_test.txt`, `data/v2_contract/`
+Carrying those indexing guarantees forward is handled entirely inside **`multiphysics_dec_solver/step2_heterogeneous_contract/`**. After **`Pkg.instantiate()`**—including the small housekeeping fixes for multi-line **`using`** and the fragile **`has_subpart`** guard—the exporter **`src/export_hetero_json.jl`** reloads Step 1’s **`TopologyBlocks1Based`** from **`JLD2`** when available (otherwise JSON), rebuilds the primal mesh with **`glue_triangle!`** / **`orient!`**, constructs **`EmbeddedDeltaDualComplex2D{Bool,Float64,Point3}`**, and subdivides duals with **`subdivide_duals!(..., Barycenter())`**. It emits COO tensors **`primal_to_primal`**, **`dual_to_dual`**, and a **`primal_to_dual`** tensor derived from **`elementary_duals`**, subtracting one per index for **0-based** JSON and enforcing **`@assert`** consistency against **`dec_counts`**. **`julia --project=. src/main.jl`** then lands at **`data/v2_contract/hetero_cylinder_wake_t0.35.json`** near **t ≈ 0.35**, preferring Step 1 **`.jld2`** inputs. Python **`python src/test_hetero_load.py`** (see **`requirements_test.txt`**) revisits the same tensors in the terminal and renders **`zenn_assets/hetero_topology.png`** plus **`hetero_topology_zoom.png`**. *(Julia ≥ 1.11:* omit **`SparseArrays`** from **`[deps]`**—stdlib/registry clashes on **`instantiate`**—and rely on transitive sparse support via **`CombinatorialSpaces`**.) Key paths remain **`Project.toml`**, **`src/main.jl`**, **`src/export_hetero_json.jl`**, **`src/test_hetero_load.py`**, **`requirements_test.txt`**, and **`data/v2_contract/`**.
 
 ### Step 3: PyG HeteroData Loading & Feature Audit
 
@@ -178,21 +157,9 @@ The V2 JSON contract is instantiated as a PyTorch Geometric `HeteroData` object.
 
 3. **AI Readiness** — Feature histograms show velocity and pressure on scales suitable for neural-network training and downstream normalization.
 
-### ▶ What was executed
+Install **`requirements_step3.txt`** inside **`multiphysics_dec_solver/step3_pyg_heterodata_loading/`**, then let **`hetero_dataset.load_v2_hetero_json`** ingest the Step 2 artifact (default **`../step2_heterogeneous_contract/data/v2_contract/hetero_cylinder_wake_t0.35.json`**): it appends midpoint nodes, casts **`float32`** **`x`**/**`pos`** with **`long`** **`edge_index`**, preserves the source JSON path on the object, and **`save_hetero_pt`** snapshots **`data/processed/hetero_cylinder_wake_t0.35.pt`** plus **`HeteroV2Meta`**. **`python src/test_audit.py`** (optional JSON override) and **`python src/visualize_pyg.py`** complete the loop—**`visualize_pyg`** loads checkpoints via **`torch.load(..., map_location="cpu", weights_only=False)`** for PyTorch 2.6+ pickle safety—and emit **`zenn_assets/pyg_subgraph_topology.png`** and **`pyg_feature_distributions.png`**.
 
-- **Package:** `multiphysics_dec_solver/step3_pyg_heterodata_loading/` + **`requirements_step3.txt`** (PyTorch, PyTorch Geometric, NumPy, NetworkX, Matplotlib, Seaborn).
-- **Loader:** **`hetero_dataset.load_v2_hetero_json`** reads Step 2 V2 JSON (default **`../step2_heterogeneous_contract/data/v2_contract/hetero_cylinder_wake_t0.35.json`**); appends **edge-midpoint** rows; **`HeteroData`** with **`float32`** `x`/`pos`, **`long`** `edge_index`; keeps source JSON path on the object.
-- **Checkpoint:** **`save_hetero_pt`** → **`data/processed/hetero_cylinder_wake_t0.35.pt`** (+ **`HeteroV2Meta`**).
-- **Audit / viz:** **`python src/test_audit.py`** (optional JSON path) → structure, NaN/Inf, dtype, metapath index asserts; **`python src/visualize_pyg.py`** loads **`.pt`** with **`torch.load(..., map_location="cpu", weights_only=False)`** → **`zenn_assets/pyg_subgraph_topology.png`**, **`pyg_feature_distributions.png`**.
-
-### 🛡️ Error Handling
-
-**`hetero_dataset.load_v2_hetero_json`** raises `ValueError` when primal physics feature lengths disagree with `num_nodes`, when any `edge_index` is not shaped `[2, E]`, or when reconstructed primal/dual edge midpoints disagree with `dec_counts` (this blocks silent topology drift). **`test_audit`** asserts finite `x`/`pos`, dtype and layout of every metapath `edge_index`, and index-range splits so `p2p`/`d2d` touch only primal/dual **vertex** slices while `p2d` references **midpoint** tails—catching out-of-bounds or partition collisions early. **`visualize_pyg`** loads checkpoints with `torch.load(..., weights_only=False, map_location="cpu")` for PyTorch 2.6+ pickle compatibility, raises `FileNotFoundError` if the `.pt` file is missing, and falls back to the primal vertex nearest the geometric centroid when `('primal', 0)` is isolated in the fused NetworkX view so ego extraction never silently returns an empty graph.
-
-**Code layout:** `multiphysics_dec_solver/step3_pyg_heterodata_loading/`
-
-- `requirements_step3.txt`, `src/hetero_dataset.py`, `src/test_audit.py`, `src/visualize_pyg.py`, `data/processed/*.pt`
-- Run `python src/test_audit.py` then `python src/visualize_pyg.py` (CPU PyTorch recommended: `pip install torch --index-url https://download.pytorch.org/whl/cpu`).
+That automation lines up with the earlier guarantees: **`load_v2_hetero_json`** raises **`ValueError`** when primal physics lengths disagree with **`num_nodes`**, when any **`edge_index`** is not shaped **`[2, E]`**, or when midpoint reconstruction conflicts with **`dec_counts`**, preventing silent topology drift. **`test_audit`** asserts finite **`x`**/**`pos`**, dtypes/layouts on each metapath, and index splits so **`p2p`**/**`d2d`** touch only primal/dual vertex slices while **`p2d`** references midpoint tails—surfacing out-of-bounds or partition collisions immediately. **`visualize_pyg`** raises **`FileNotFoundError`** if the **`.pt`** is absent and, when **`('primal', 0)`** is isolated inside the fused NetworkX ego graph, falls back to the primal vertex closest to the geometric centroid so visualization never returns an empty subgraph. For readable latency on laptops, prefer **`pip install torch --index-url https://download.pytorch.org/whl/cpu`** before **`python src/test_audit.py`** then **`python src/visualize_pyg.py`**; the modules involved are **`requirements_step3.txt`**, **`src/hetero_dataset.py`**, **`src/test_audit.py`**, **`src/visualize_pyg.py`**, and serialized graphs under **`data/processed/*.pt`**.
 
 ### Step 4: HeteroGNN Architecture & Physics-Informed Training
 
@@ -240,18 +207,7 @@ A **spatial inference** view of the trained **HeteroGNN**: heterogeneous node fe
 2. **Physics-informed operability** — A custom **pseudo–divergence** loss built from primal **`p2p`** graph gradients backpropagates through the PyG heterogeneous graph and combines cleanly with **MSE**.
 3. **End-to-end pipeline completion** — Inference plots show data flowing from categorical Julia exports through **`HeteroData`** training to Python scatter maps of prediction and absolute error.
 
-### ▶ What was executed
-
-- **Package:** **`multiphysics_dec_solver/step4_hetero_gnn_training/`** + **`requirements_step4.txt`** (CPU PyTorch hint, **`torch-geometric`**, **`tqdm`**, **`tensorboard`**, **`matplotlib`**).
-- **Model:** **`PhysicsInformedHeteroGNN`** in **`src/model.py`** — **`HeteroConv`** + **`GraphConv`**, **`hidden_dim`** / **`num_layers`**, primal **`Linear`** head matching **`primal.x`** width.
-- **Loss:** **`physics_loss.py`** — **MSE** + **λ × pseudo_divergence_loss** (filtered **`p2p`** edges on fluid vertices).
-- **Training:** **`train.py`** loads **`../step3_pyg_heterodata_loading/data/processed/hetero_cylinder_wake_t0.35.pt`**, prepends **`step3_pyg_heterodata_loading/src`** for unpickling; single-graph primal **`x`** auto-encoding; **`tqdm`** (**total / data / phys**); TensorBoard **`runs/step4_hetero_gnn/`**; checkpoint **`checkpoints/hetero_gnn_model.pth`**.
-- **Inference plot:** **`visualize_inference.py`** — **`eval()`**, **`torch.no_grad()`**, velocity magnitude **$\sqrt{u^2+v^2}$** from **`x[:,0:2]`** → **`zenn_assets/gnn_inference_comparison.png`** (**1×3**, **`turbo`** / **`Reds`**, **15×4**, **300 DPI**).
-
-**Code layout:** `multiphysics_dec_solver/step4_hetero_gnn_training/`
-
-- `requirements_step4.txt`, `src/model.py`, `src/physics_loss.py`, `src/train.py`, `src/visualize_inference.py`, `checkpoints/`, `zenn_assets/`
-- **`pip install -r requirements_step4.txt`** → **`python src/train.py`** → **`python src/visualize_inference.py`**
+Training lives under **`multiphysics_dec_solver/step4_hetero_gnn_training/`**: install **`requirements_step4.txt`** (CPU PyTorch hint, **`torch-geometric`**, **`tqdm`**, **`tensorboard`**, **`matplotlib`**), then execute **`python src/train.py`**. **`PhysicsInformedHeteroGNN`** in **`src/model.py`** stacks **`HeteroConv`** + **`GraphConv`** with configurable **`hidden_dim`** / **`num_layers`** and a primal **`Linear`** head sized to **`primal.x`**. **`physics_loss.py`** blends **MSE** with **λ × pseudo_divergence_loss** on fluid-filtered **`p2p`** edges. **`train.py`** reads **`../step3_pyg_heterodata_loading/data/processed/hetero_cylinder_wake_t0.35.pt`**, prepends **`step3_pyg_heterodata_loading/src`** for pickle compatibility, trains the single-graph primal **`x`** auto-encoder with **`tqdm`** bars (total / data / physics), logs TensorBoard runs under **`runs/step4_hetero_gnn/`**, and checkpoints **`checkpoints/hetero_gnn_model.pth`**. **`python src/visualize_inference.py`** switches to **`eval()`** / **`torch.no_grad()`**, maps velocity magnitude **$\sqrt{u^2+v^2}$** from **`x[:,0:2]`**, and saves **`zenn_assets/gnn_inference_comparison.png`** (1×3 panels, **`turbo`** / **`Reds`**, 15×4 in at 300 DPI)—closing the loop with the spatial comparisons validated above. Supporting files include **`requirements_step4.txt`**, **`src/model.py`**, **`src/physics_loss.py`**, **`src/train.py`**, **`src/visualize_inference.py`**, **`checkpoints/`**, and **`zenn_assets/`**.
 
 ### Step 5: Zero-Shot Generalization & Performance Benchmark
 
@@ -275,18 +231,7 @@ The workflow proves that a **physics-informed HeteroGNN** can be exercised as a 
 2. **Quantified accuracy** — Global **MSE**/**MAE** summarize primal-field reconstruction on new graphs; spatial error panels localize discrepancy.
 3. **Quantified speed** — Repeated forward benchmarks document surrogate latency suitable for interactive or outer-loop use cases compared with traditional solvers.
 
-### ▶ What was executed
-
-- **Package:** **`multiphysics_dec_solver/step5_zero_shot_evaluation/`** + **`requirements_step5.txt`** (PyTorch, PyTorch Geometric, Matplotlib, NumPy, **`tabulate`**, CPU wheel hint).
-- **Scripts:** **`evaluate_generalization.py`** (`--data-path`, `--model-path`) → **`eval()`**, **MSE**/**MAE**, **`evaluation_results/zeroshot_comparison.png`**. **`benchmark_speed.py`** → **10** warm-up + **100** timed forwards (**`time.perf_counter`**, CUDA sync when applicable), **`tabulate`** summary in **ms**.
-- **Imports:** Both prepend **`step4_hetero_gnn_training/src`** (model utilities) and **`step3_pyg_heterodata_loading/src`** (pickle).
-- **ROI chart (illustrative):** **`src/visualize_benchmark_chart.py`** → **`evaluation_results/roi_speedup_benchmark.png`** (**300** DPI, log **y**); tune **`TRADITIONAL_CFD_SECONDS`** / **`GNN_INFERENCE_SECONDS`** to match your CFD budget and **`benchmark_speed.py`** means.
-
-**Code layout:** `multiphysics_dec_solver/step5_zero_shot_evaluation/`
-
-- `requirements_step5.txt`, `src/evaluate_generalization.py`, `src/benchmark_speed.py`, `src/visualize_benchmark_chart.py`, `evaluation_results/`
-- **`pip install -r requirements_step5.txt`** → **`python src/evaluate_generalization.py`** and **`python src/benchmark_speed.py`** (defaults: cylinder-wake **`.pt`** + Step 4 **`.pth`** smoke test; pass another compatible **`.pt`** for unseen meshes).
-- Optional: **`python src/visualize_benchmark_chart.py`** to refresh the illustrative ROI bar chart.
+Operational scripts sit in **`multiphysics_dec_solver/step5_zero_shot_evaluation/`**. After **`pip install -r requirements_step5.txt`** (PyTorch, PyTorch Geometric, Matplotlib, NumPy, **`tabulate`**, plus the CPU wheel hint), **`python src/evaluate_generalization.py`** accepts **`--data-path`** and **`--model-path`**, runs **`eval()`**, prints **MSE**/**MAE** over all primal **`x`** nodes, and writes **`evaluation_results/zeroshot_comparison.png`** using the same 1×3 scatter layout introduced in Step 4; **`python src/benchmark_speed.py`** performs ten warm-up forwards and times one hundred timed forwards with **`time.perf_counter`** (CUDA synchronized when available), summarizing mean/std/min/max latency in milliseconds via **`tabulate`**. Both drivers prepend **`step4_hetero_gnn_training/src`** and **`step3_pyg_heterodata_loading/src`** so checkpoints unpickle cleanly. Optionally **`python src/visualize_benchmark_chart.py`** refreshes **`evaluation_results/roi_speedup_benchmark.png`** (300 DPI, log-scaled **y** axis) by editing **`TRADITIONAL_CFD_SECONDS`** / **`GNN_INFERENCE_SECONDS`** to reflect your CFD budget and the measured surrogate latency—making the ROI narrative explicit relative to the accuracy metrics gathered earlier. Defaults smoke-test the cylinder-wake **`.pt`** with the Step 4 **`.pth`**; pass another compatible **`.pt`** to probe unseen meshes.
 
 #### Visualization: ROI inference speedup (illustrative benchmark)
 
@@ -404,17 +349,7 @@ $$
 
 3. **物理ソルバーの安定性** — 圏論的ダイアグラムから得た **DEC** オペレータが、境界条件下で安定した初期化と時間発展を与えることを確認。
 
-### ▶ 実施したこと
-
-- **Julia 環境:** `step1_initial_physics_def/` で有効化（`src/main.jl` の **`Pkg.activate`** がプロジェクトルート **`step1_initial_physics_def/`** を指す）。ワークフローに **`Pkg.instantiate()`** を含める。
-- **グラウンドトゥルース:** **`julia --project=. src/main.jl`**（既定 **`cylinder_wake`**、**`--t-end 1.2`**、格子 **`nx=36`**, **`ny=18`**、**`--frames 73`**、流体・熱ブロック係数；**`gensim` + `OrdinaryDiffEq`**）。
-- **出力:** **`data/raw/ground_truth_cylinder_wake.json`** / **`.jld2`**（**1 始まり**トポロジ、時系列の頂点代理場 `velocity_vertex_vx/vy`、`pressure`、`temperature`）。
-- **別シナリオ:** **`--scenario heat_sink`** → **`ground_truth_heat_sink.json`**。
-- **Python 可視化:** **`requirements_viz.txt`** を入れたうえで **`visualize_contract.py`** を実行 → **`zenn_assets/`** の GIF 等を生成し、Matplotlib **`Triangulation`** で整合確認。
-
-**実装の場所:** `multiphysics_dec_solver/step1_initial_physics_def/`
-
-- `Project.toml`、`src/main.jl`、`src/visualize_contract.py`、`data/raw/`
+ここまでの検証は、`multiphysics_dec_solver/step1_initial_physics_def/` で **`Pkg.instantiate()`** のあと **`julia --project=. src/main.jl`** を走らせることで再現できる（`src/main.jl` の **`Pkg.activate`** はこのディレクトリをプロジェクトルートとする）。既定の **`cylinder_wake`** では **`gensim` + OrdinaryDiffEq** で **`--t-end 1.2`**・格子 **`nx=36`**, **`ny=18`**・**`--frames 73`**・流体／熱係数を積み、**`data/raw/ground_truth_cylinder_wake.json`** と **`ground_truth_cylinder_wake.jld2`** を出力する（**1 始まり**トポロジと頂点代理場 **`velocity_vertex_vx`/`vy`**、**`pressure`**、**`temperature`**）。**`--scenario heat_sink`** に切り替えると **`ground_truth_heat_sink.json`** が得られる。Python 側では **`requirements_viz.txt`** を入れたうえで **`src/visualize_contract.py`** を実行し、**`zenn_assets/`** の GIF などを更新しつつ Matplotlib **`Triangulation`** でコントラクトの往復を確認する。手元で触るファイルは **`Project.toml`**、**`src/main.jl`**、**`src/visualize_contract.py`**、および **`data/raw/`** に蓄積される生成物である。
 
 ### ステップ 2: ヘテロジニアストポロジーの抽出と JSON コントラクト V2
 
@@ -442,19 +377,7 @@ $$
 
 3. **PyG HeteroData への準備完了** — 出力された V2 JSON が、Python 側での重いデータ整形を一切必要とせず、PyTorch Geometric の `HeteroData` を即座にインスタンス化できるスキーマに厳密に準拠していることを確認。
 
-### ▶ 実施したこと
-
-- **Julia プロジェクト:** `step2_heterogeneous_contract/` — `Project.toml` / `Manifest.toml`、`CombinatorialSpaces`、`JSON3`、`JLD2`、`GeometryBasics`。
-- **エクスポート:** `export_hetero_json.jl` が **ステップ 1** の **`TopologyBlocks1Based`** をミラーして JLD2 復元（無ければ **JSON**）。`glue_triangle!` / `orient!` と **`EmbeddedDeltaDualComplex2D` + `subdivide_duals!(..., Barycenter())`** でデュアル複体を再構築。
-- **COO / 規約:** `primal_to_primal` / `dual_to_dual` / `elementary_duals` 由来の `primal_to_dual` を出力。**0 始まり（各添字 −1）** と **`dec_counts` の `@assert`**。
-- **運用:** **`Pkg.instantiate()`**（複数行 `using` の末尾カンマ修正、`has_subpart` 分岐削除）→ **`julia --project=. src/main.jl`** → **`data/v2_contract/hetero_cylinder_wake_t0.35.json`**（**t≈0.35**、入力は **ステップ 1** の **`.jld2` 優先**）。
-- **Python:** **`python src/test_hetero_load.py`** — ターミナル監査、**`zenn_assets/hetero_topology.png`** と **`hetero_topology_zoom.png`**（`requirements_test.txt` / `uv run ...` 可）。
-- **補足（Julia ≥1.11）:** **`SparseArrays`** は **`[deps]` に固定しない**（`instantiate` 競合）。**`CombinatorialSpaces`** 経由の標準ライブラリ利用に委ねる。
-
-**実装・出力:**
-
-- Julia: `multiphysics_dec_solver/step2_heterogeneous_contract/` — **`julia --project=. src/main.jl`** → `data/v2_contract/hetero_cylinder_wake_t0.35.json`（入力: **ステップ 1** の `data/raw/*.jld2` または `.json`）。
-- Python 監査・図: **`python src/test_hetero_load.py`**（`requirements_test.txt`）。
+インデックス整合をそのまま JSON に載せる処理は **`multiphysics_dec_solver/step2_heterogeneous_contract/`** に集約されている。**`Pkg.instantiate()`**（複数行 **`using`** の末尾カンマ修正や **`has_subpart`** 分岐削除を含む）の後、**`export_hetero_json.jl`** が **ステップ 1** の **`TopologyBlocks1Based`** を **JLD2** から復元し（無ければ JSON）、**`glue_triangle!`** / **`orient!`** でプライマルを組み直し、**`EmbeddedDeltaDualComplex2D`** と **`subdivide_duals!(..., Barycenter())`** でデュアル複体を得る。**`primal_to_primal`**、**`dual_to_dual`**、**`elementary_duals`** に基づく **`primal_to_dual`** を COO で書き出す際は各添字を **−1** して **0 始まり**にし、**`dec_counts`** との **`@assert`** で整合を固定する。**`julia --project=. src/main.jl`** は **ステップ 1** の **`.jld2` を優先**して入力し、**t≈0.35** の断面を **`data/v2_contract/hetero_cylinder_wake_t0.35.json`** に落とす。Python の **`python src/test_hetero_load.py`**（**`requirements_test.txt`**）がターミナル監査と **`hetero_topology.png`** / **`hetero_topology_zoom.png`** を担当する。*（Julia ≥1.11:* **`SparseArrays`** を **`[deps]` に固定しない**と **`instantiate`** が衝突するため、疎行列は **`CombinatorialSpaces`** 経由の依存に任せる。）主要パスは **`Project.toml`**、**`src/main.jl`**、**`src/export_hetero_json.jl`**、**`src/test_hetero_load.py`**、**`requirements_test.txt`**、**`data/v2_contract/`** である。
 
 ### ステップ 3: PyG における HeteroData の読み込みと特徴量監査
 
@@ -480,21 +403,9 @@ V2 JSON コントラクトを PyTorch Geometric の `HeteroData` オブジェク
 
 3. **AI 学習への準備完了** — 特徴量の分布ヒストグラムにより、物理変数（流速、圧力など）がニューラルネットワークの学習に適したスケールであり、標準化への準備が整っていることを実証した。
 
-### ▶ 実施したこと
+**`multiphysics_dec_solver/step3_pyg_heterodata_loading/`** に **`requirements_step3.txt`** を入れたうえで、**`hetero_dataset.load_v2_hetero_json`** が **ステップ 2** の V2 JSON（既定 **`../step2_heterogeneous_contract/data/v2_contract/hetero_cylinder_wake_t0.35.json`**）を読み込み、辺中点ノードを連結した **`HeteroData`**（**`float32`** の **`x`**/**`pos`**、**`long`** の **`edge_index`**）を構築し、入力 JSON のパスもオブジェクトに保持する。**`save_hetero_pt`** が **`data/processed/hetero_cylinder_wake_t0.35.pt`** と **`HeteroV2Meta`** を書き出したあと、**`python src/test_audit.py`**（JSON は第 1 引数で上書き可）と **`python src/visualize_pyg.py`** が続く。可視化側は PyTorch 2.6 以降向けに **`torch.load(..., map_location="cpu", weights_only=False)`** を使い、**`pyg_subgraph_topology.png`** と **`pyg_feature_distributions.png`** を **`zenn_assets/`** に出力する。
 
-- **パッケージ:** `multiphysics_dec_solver/step3_pyg_heterodata_loading/` + **`requirements_step3.txt`**（PyTorch、PyTorch Geometric、NumPy、NetworkX、Matplotlib、Seaborn）。
-- **ローダ:** **`hetero_dataset.load_v2_hetero_json`** が **ステップ 2** の V2 JSON（既定 **`../step2_heterogeneous_contract/data/v2_contract/hetero_cylinder_wake_t0.35.json`**）を読み込み、辺中点ノードを連結した **`HeteroData`**（**`float32`** の `x`/`pos`、**`long`** の `edge_index`）。JSON パスをオブジェクトに保持。
-- **チェックポイント:** **`save_hetero_pt`** → **`data/processed/hetero_cylinder_wake_t0.35.pt`**（**`HeteroV2Meta`** 同梱）。
-- **監査・可視化:** **`python src/test_audit.py`**（JSON パスは第 1 引数で上書き可）→ **`python src/visualize_pyg.py`**（**`torch.load(..., map_location="cpu", weights_only=False)`**）→ **`pyg_subgraph_topology.png`** / **`pyg_feature_distributions.png`**。
-
-### 🛡️ エラーハンドリング
-
-**`hetero_dataset.load_v2_hetero_json`** は、プライマル物理特徴の長さと `num_nodes` の不一致、`edge_index` が `[2, E]` でない場合、および `dec_counts` と辺中点再構成の不一致に **`ValueError`** を送出し、トポロジーが静かに崩れることを防ぐ。**`test_audit`** は `x`/`pos` の有限性、各メタパス `edge_index` のデータ型・形状、`p2p`/`d2d` がプライマル／デュアルの**頂点ブロック**のみ、`p2d` が**辺中点**ブロックのみを参照するかを **assert** し、範囲外やパーティション衝突を早期検知する。**`visualize_pyg`** は PyTorch 2.6 以降の安全な読込のため `torch.load(..., weights_only=False, map_location="cpu")` を使用し、`.pt` 欠落時は **`FileNotFoundError`** を出す。統合グラフ上で `('primal', 0)` が孤立している場合は**幾何重心に最も近いプライマル頂点**へフォールバックし、空のエゴグラフを避ける。
-
-**実装の場所:** `multiphysics_dec_solver/step3_pyg_heterodata_loading/`
-
-- `requirements_step3.txt`、`src/hetero_dataset.py`、`src/test_audit.py`、`src/visualize_pyg.py`、`data/processed/*.pt`
-- `python src/test_audit.py` のあと `python src/visualize_pyg.py`（CPU 版 PyTorch を推奨: `pip install torch --index-url https://download.pytorch.org/whl/cpu`）。
+これらは先に述べた監査内容と矛盾しないように組まれている。**`load_v2_hetero_json`** はプライマル特徴長と **`num_nodes`** の不一致、**`edge_index`** が **`[2, E]`** でない場合、**`dec_counts`** と辺中点再構成の食い違いに **`ValueError`** を投げ、トポロジーが黙って崩れるのを防ぐ。**`test_audit`** は **`x`**/**`pos`** の有限性・各メタパスの dtype／形状・**`p2p`**/**`d2d`** がプライマル／デュアルの頂点ブロックのみを指すこと・**`p2d`** が辺中点ブロックのみを指すことを **assert** し、範囲外やパーティション衝突を早期に検知する。**`visualize_pyg`** は **`.pt`** 欠落時に **`FileNotFoundError`** を返し、統合グラフで **`('primal', 0)`** が孤立しているときは**幾何重心に最も近いプライマル頂点**へフォールバックして空のエゴグラフを避ける。CPU 推奨なら **`pip install torch --index-url https://download.pytorch.org/whl/cpu`** のうえ **`python src/test_audit.py`** のあと **`python src/visualize_pyg.py`** とするとよい。関連ファイルは **`requirements_step3.txt`**、**`src/hetero_dataset.py`**、**`src/test_audit.py`**、**`src/visualize_pyg.py`**、**`data/processed/*.pt`** である。
 
 ### ステップ 4: HeteroGNN アーキテクチャと Physics-Informed 学習
 
@@ -542,18 +453,7 @@ $$
 2. **物理情報付きパイプラインの稼働** — グラフ勾配に基づくカスタム **擬似発散損失**を統合し、バックワードが PyG のグラフ構造上で質量保存（発散ゼロに寄せた）制約のペナルティを **MSE** とともに学習できることを確認した。
 3. **エンドツーエンド・パイプラインの完成** — 可視化により、Julia 側の数学的定義から **Python** 側のニューラルネット推論・誤差マッピングまで、データが途切れず流れることを確認した。
 
-### ▶ 実施したこと
-
-- **パッケージ:** **`multiphysics_dec_solver/step4_hetero_gnn_training/`** + **`requirements_step4.txt`**（CPU PyTorch ヒント、**`torch-geometric`**、**`tqdm`**、**`tensorboard`**、**`matplotlib`**）。
-- **モデル:** **`src/model.py`** の **`PhysicsInformedHeteroGNN`**（**`HeteroConv`** + **`GraphConv`**、隠れ次元・層数、プライマル **`Linear`** が **`primal.x`** 幅に一致）。
-- **損失:** **`physics_loss.py`** — **MSE** + **λ × 擬似発散損失**（**`p2p`** を流体頂点にフィルタ）。
-- **学習:** **`train.py`** が **`../step3_pyg_heterodata_loading/data/processed/hetero_cylinder_wake_t0.35.pt`** を読み込み、pickle のため **`step3_pyg_heterodata_loading/src`** を **`sys.path`** 先頭に追加。単一グラフでプライマル **`x`** の自己符号化、tqdm（合計／データ／物理）、TensorBoard **`runs/step4_hetero_gnn/`**、**`checkpoints/hetero_gnn_model.pth`**。
-- **推論可視化:** **`visualize_inference.py`** — **`eval()`**・**`torch.no_grad()`**、速度の大きさ（**`x` の 0–1 列**）→ **`zenn_assets/gnn_inference_comparison.png`**（**1×3**、**`turbo` / `Reds`**、**15×4・300 DPI**）。
-
-**実装の場所:** **`multiphysics_dec_solver/step4_hetero_gnn_training/`**
-
-- `requirements_step4.txt`、`src/model.py`、`src/physics_loss.py`、`src/train.py`、`src/visualize_inference.py`、`checkpoints/`、`zenn_assets/`
-- **`pip install -r requirements_step4.txt`** → **`python src/train.py`** → **`python src/visualize_inference.py`**
+学習自体は **`multiphysics_dec_solver/step4_hetero_gnn_training/`** で行う。**`requirements_step4.txt`**（CPU PyTorch のヒント、**`torch-geometric`**、**`tqdm`**、**`tensorboard`**、**`matplotlib`**）を入れたうえで **`python src/train.py`** を実行する。**`src/model.py`** の **`PhysicsInformedHeteroGNN`** が **`HeteroConv`** + **`GraphConv`** とプライマル **`Linear`**（**`primal.x`** の幅に合わせる）を束ね、**`physics_loss.py`** が流体 **`p2p`** にフィルタした **MSE + λ × 擬似発散損失**を返す。**`train.py`** は **`../step3_pyg_heterodata_loading/data/processed/hetero_cylinder_wake_t0.35.pt`** を読み、pickle のために **`step3_pyg_heterodata_loading/src`** を **`sys.path`** 先頭へ足し、単一グラフのプライマル **`x`** 自己符号化を **`tqdm`**（合計／データ／物理）付きで進め、TensorBoard **`runs/step4_hetero_gnn/`** と **`checkpoints/hetero_gnn_model.pth`** に記録する。その結果を **`python src/visualize_inference.py`** が **`eval()`**・**`torch.no_grad()`** で平面散布し、速度の大きさ（**`x`** の先頭 2 チャネル）から **`zenn_assets/gnn_inference_comparison.png`**（**1×3**、**`turbo` / `Reds`**、**15×4・300 DPI**）を出力して、直前まで確認した空間推論と視覚的に接続する。リポジトリ上の主ファイルは **`requirements_step4.txt`**、**`src/model.py`**、**`src/physics_loss.py`**、**`src/train.py`**、**`src/visualize_inference.py`**、**`checkpoints/`**、**`zenn_assets/`** である。
 
 ### ステップ 5: ゼロショット汎化とパフォーマンスベンチマーク
 
@@ -575,18 +475,7 @@ $$
 2. **精度の定量化** — **MSE**／**MAE** でプライマル場の再構成を要約し、空間誤差パネルで分布を確認できる。
 3. **速度の定量化** — 繰り返しベンチマークで、対話的用途や外側ループに見合う **ミリ秒級** のレイテンシを記録できる。
 
-### ▶ 実施したこと
-
-- **パッケージ:** **`multiphysics_dec_solver/step5_zero_shot_evaluation/`** + **`requirements_step5.txt`**（PyTorch、PyTorch Geometric、Matplotlib、NumPy、**`tabulate`**、CPU ホイールのヒント）。
-- **スクリプト:** **`evaluate_generalization.py`**（**`--data-path`** / **`--model-path`**）→ **`eval()`**、**MSE**/**MAE**、**`evaluation_results/zeroshot_comparison.png`**。**`benchmark_speed.py`** → **10** 回ウォームアップ後 **100** 回計測（**`time.perf_counter`**、CUDA 時は同期）、**`tabulate`** で **ms** 表示。
-- **パス:** 両方とも **`step4_hetero_gnn_training/src`** と **`step3_pyg_heterodata_loading/src`** を **`sys.path`** に追加。
-- **ROI 図（代表値・イラスト）:** **`visualize_benchmark_chart.py`** → **`evaluation_results/roi_speedup_benchmark.png`**（**300** DPI、対数 **y** 軸）。**`TRADITIONAL_CFD_SECONDS`** / **`GNN_INFERENCE_SECONDS`** は想定 CFD 時間および **`benchmark_speed.py`** の平均に合わせて調整。
-
-**実装の場所:** **`multiphysics_dec_solver/step5_zero_shot_evaluation/`**
-
-- `requirements_step5.txt`、`src/evaluate_generalization.py`、`src/benchmark_speed.py`、`src/visualize_benchmark_chart.py`、`evaluation_results/`
-- **`pip install -r requirements_step5.txt`** → **`python src/evaluate_generalization.py`** と **`python src/benchmark_speed.py`**（既定: シリンダー後流 **`.pt`** とステップ 4 の **`.pth`** のリグレッション；未知メッシュは互換 **`.pt`** を指定）。
-- 任意: **`python src/visualize_benchmark_chart.py`** で ROI 棒グラフを再生成。
+ゼロショット評価とベンチマークは **`multiphysics_dec_solver/step5_zero_shot_evaluation/`** にまとまっている。**`pip install -r requirements_step5.txt`**（PyTorch、PyTorch Geometric、Matplotlib、NumPy、**`tabulate`**、CPU ホイールのヒント）の後、**`python src/evaluate_generalization.py`** が **`--data-path`** と **`--model-path`** を受け取り **`eval()`** で推論し、全プライマル **`x`** の **MSE**／**MAE** を表示して **`evaluation_results/zeroshot_comparison.png`**（ステップ 4 と同型の **1×3** 散布）へ書き出す。**`python src/benchmark_speed.py`** はウォームアップ **10** 回のあと計測対象 **100** 回の順伝播を **`time.perf_counter`** で取り（CUDA 時は同期）、**`tabulate`** で **ms** 集計する。いずれもモデルと **`HeteroData`** の unpickle のために **`step4_hetero_gnn_training/src`** と **`step3_pyg_heterodata_loading/src`** を **`sys.path`** に差し込む。任意で **`python src/visualize_benchmark_chart.py`** を走らせると **`evaluation_results/roi_speedup_benchmark.png`**（**300** DPI・対数 **y**）が更新され、ファイル先頭の **`TRADITIONAL_CFD_SECONDS`** と **`GNN_INFERENCE_SECONDS`** を、想定 CFD 時間や **`benchmark_speed.py`** の平均に合わせて調整できるので、先に確認した精度指標と ROI を一文脈で語れる。既定コマンドはシリンダー後流 **`.pt`** とステップ 4 の **`.pth`** でリグレッションするだけだが、未知メッシュなら互換の **`.pt`** を渡せばよい。
 
 #### 可視化: ROI 推論高速化（代表的ベンチマーク）
 
