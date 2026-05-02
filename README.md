@@ -85,6 +85,14 @@ This step establishes the ground truth generation using Applied Category Theory 
 
 A 2D incompressible fluid flow around a circular obstacle (**Cylinder Wake** scenario). The underlying physics are strictly defined as an **operadic composition** of the Navier–Stokes equations using [Decapodes.jl](https://github.com/AlgebraicJulia/Decapodes.jl) and simulated on an unstructured simplicial complex generated via [CombinatorialSpaces.jl](https://github.com/AlgebraicJulia/CombinatorialSpaces.jl).
 
+**PDE sketch.** With velocity $\mathbf{u}$, pressure $p$, density $\rho$, kinematic viscosity $\nu$, temperature $T$, and thermal diffusivity $\alpha$, a standard incompressible coupled statement on $\Omega \subset \mathbb{R}^2$ is
+
+$$
+\partial_t \mathbf{u} + (\mathbf{u}\cdot\nabla)\mathbf{u} = -\rho^{-1}\nabla p + \nu \Delta \mathbf{u} + \mathbf{f}, \qquad \nabla\cdot \mathbf{u} = 0, \qquad \partial_t T + \nabla\cdot(T\mathbf{u}) = \alpha \Delta T .
+$$
+
+**Discrete Exterior Calculus (DEC)** replaces $\nabla$, $\Delta$, and divergence by metric-aware sparse operators on the simplicial mesh; **Decapodes.jl** composes them diagrammatically into a semi-discrete ODE integrated by **OrdinaryDiffEq.jl**. *(Executable momentum in `definitions.jl` uses a Stokes-type linearization $\partial_t \mathbf{u} \approx \nu \Delta \mathbf{u} - \rho^{-1}\nabla p$ plus an auxiliary pressure equation $\partial_t p = \kappa \Delta p$, coupled to advection–diffusion for $T$.)*
+
 #### What was Confirmed?
 
 This visualization serves as the proof of concept for our architecture:
@@ -379,6 +387,14 @@ categorical_physics_engine/
 #### シミュレーション対象
 
 2 次元非圧縮性流体が円形障害物（シリンダー）周りを流れる **シリンダー後流** シナリオ。物理は `Decapodes.jl` によるナビエ・ストークス方程式の **operadic 合成**として定義し、`CombinatorialSpaces.jl` が生成する非構造単体複体上で時間発展を計算します。
+
+**支配方程式のスケッチ。** 速度 $\mathbf{u}$、圧力 $p$、密度 $\rho$、動粘性係数 $\nu$、温度 $T$、熱拡散率 $\alpha$ として、$\Omega \subset \mathbb{R}^2$ 上の非圧縮連成場の典型形は
+
+$$
+\partial_t \mathbf{u} + (\mathbf{u}\cdot\nabla)\mathbf{u} = -\rho^{-1}\nabla p + \nu \Delta \mathbf{u} + \mathbf{f}, \qquad \nabla\cdot \mathbf{u} = 0, \qquad \partial_t T + \nabla\cdot(T\mathbf{u}) = \alpha \Delta T
+$$
+
+である。**離散外微分（DEC）** は単体複体上で $\nabla$・$\Delta$・発散を計量に依存する疎行列に置き換え、**Decapodes.jl** がそれらをダイアグラムとして合成し、**OrdinaryDiffEq.jl** が半離散 ODE を時間積分する。*（実際に `definitions.jl` で実行されるモメンタムは対流項を含まないストークス型の線形化 $\partial_t \mathbf{u} \approx \nu \Delta \mathbf{u} - \rho^{-1}\nabla p$ と補助的な $\partial_t p = \kappa \Delta p$ に相当し、$T$ とは移流–拡散で結合する。）*
 
 #### 検証・確認事項
 
