@@ -200,6 +200,22 @@ $$
 
 where \(\hat{\mathbf{u}}=(\hat{u},\hat{v})\) and \(b_k\) aggregates edge increments at vertex \(k\) (see **`pseudo_divergence_loss`** in **`physics_loss.py`**). This is a lightweight surrogate for \(\nabla\!\cdot\mathbf{u}\approx 0\), not full cotangent-weighted DEC.
 
+**Discrete form (aligned with code).** Let \(\mathcal{E}\) be the filtered **`p2p`** vertex edges \(i\to j\). Define
+
+$$
+\boldsymbol{\Delta}_{ij} := \hat{\mathbf{u}}_i - \hat{\mathbf{u}}_j, \qquad
+\mathcal{L}_{\mathrm{grad}} = \frac{1}{|\mathcal{E}|} \sum_{(i,j)\in\mathcal{E}} \|\boldsymbol{\Delta}_{ij}\|_2^2 .
+$$
+
+Write \(r_{ij} := \Delta_{ij,u} + \Delta_{ij,v}\). For each head vertex \(j\), let \(d_j\) be its in-degree under \(\mathcal{E}\) and \(s_j := \sum_{i:\,(i\to j)\in\mathcal{E}} r_{ij}\). With \(b_j := s_j / \max(d_j,1)\),
+
+$$
+\mathcal{L}_{\mathrm{bal}} = \frac{1}{N}\sum_{j=1}^{N} b_j^2 , \qquad
+\mathcal{L}_{\mathrm{phys}} = \mathcal{L}_{\mathrm{grad}} + \mathcal{L}_{\mathrm{bal}},
+$$
+
+where \(N\) is the primal vertex count fed into **`pseudo_divergence_loss`** (vertices with \(d_j=0\) contribute \(b_j=0\)).
+
 #### Visualization: Spatial Inference Comparison
 
 ![GNN Inference Comparison](./multiphysics_dec_solver/step4_hetero_gnn_training/zenn_assets/gnn_inference_comparison.png)
@@ -471,12 +487,28 @@ V2 JSON コントラクトを PyTorch Geometric の `HeteroData` オブジェク
 **損失のスケッチ。** 予測プライマル特徴を \(\hat{\mathbf{x}}\)、教師を \(\mathbf{x}^{*}\) とし、流体頂点のみが載る **`p2p`** の辺 \((i,j)\) と速度チャネル \((u,v)\) について、
 
 $$
-\mathcal{L}_{\mathrm{data}} = \mathrm{MSE}(\hat{\mathbf{x}}, \mathbf{x}^\*), \qquad
+\mathcal{L}_{\mathrm{data}} = \mathrm{MSE}(\hat{\mathbf{x}}, \mathbf{x}^{*}), \qquad
 \mathcal{L}_{\mathrm{phys}} = \underbrace{\mathbb{E}_{(i,j)}\big[\|\hat{\mathbf{u}}_i - \hat{\mathbf{u}}_j\|^2\big]}_{\text{グラフ勾配エネルギー}} + \underbrace{\mathbb{E}_{k}\big[b_k^2\big]}_{\text{バランス項}}, \quad
 \mathcal{L} = \mathcal{L}_{\mathrm{data}} + \lambda\,\mathcal{L}_{\mathrm{phys}},
 $$
 
 とおく（\(\hat{\mathbf{u}}=(\hat{u},\hat{v})\)、\(b_k\) は頂点 \(k\) に集約した増分の正規化近似）。実装は **`physics_loss.py`** の **`pseudo_divergence_loss`**。コタンジェント重み付き DEC の厳密発散ではなく、\(\nabla\!\cdot\mathbf{u}\approx 0\) への便宜的な代理である。
+
+**離散形（実装との対応）。** フィルタ後の **`p2p`** 頂点辺 \(i\to j\) の集合を \(\mathcal{E}\) とし、
+
+$$
+\boldsymbol{\Delta}_{ij} := \hat{\mathbf{u}}_i - \hat{\mathbf{u}}_j, \qquad
+\mathcal{L}_{\mathrm{grad}} = \frac{1}{|\mathcal{E}|} \sum_{(i,j)\in\mathcal{E}} \|\boldsymbol{\Delta}_{ij}\|_2^2 .
+$$
+
+\(r_{ij} := \Delta_{ij,u} + \Delta_{ij,v}\)、頂点 \(j\) の \(\mathcal{E}\) における入次数を \(d_j\)、\(s_j := \sum_{i:\,(i\to j)\in\mathcal{E}} r_{ij}\)、\(b_j := s_j / \max(d_j,1)\) とすると、
+
+$$
+\mathcal{L}_{\mathrm{bal}} = \frac{1}{N}\sum_{j=1}^{N} b_j^2 , \qquad
+\mathcal{L}_{\mathrm{phys}} = \mathcal{L}_{\mathrm{grad}} + \mathcal{L}_{\mathrm{bal}},
+$$
+
+ここで \(N\) は損失に渡すプライマル頂点数である（\(d_j=0\) の頂点では \(b_j=0\)）。
 
 #### 可視化: 空間推論の比較
 
