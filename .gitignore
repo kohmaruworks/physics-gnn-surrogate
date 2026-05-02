@@ -6,6 +6,8 @@ Manifest.toml
 # Python
 __pycache__/
 *.py[cod]
+.venv/
+venv/
 
 # Outputs
 **/data/raw/*.json

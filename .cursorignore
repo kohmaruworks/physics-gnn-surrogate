@@ -1,0 +1,4 @@
+# Virtual environments — exclude from Cursor indexing (large trees; avoids noisy explorer badges)
+.venv/
+venv/
+
