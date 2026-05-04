@@ -68,7 +68,13 @@ categorical_physics_engine/
     └── step5_zero_shot_evaluation/         # Python — zero-shot eval & speed / ROI charts
         ├── requirements_step5.txt
         ├── src/
+        │   ├── evaluate_generalization.py
+        │   ├── benchmark_speed.py
+        │   └── generate_comparison_gif.py   # temporal GT / prediction / error GIF
         └── evaluation_results/
+            ├── zeroshot_comparison.png
+            ├── roi_speedup_benchmark.png
+            └── zeroshot_comparison_animation.gif
 ```
 
 ## Step-by-Step Implementation
@@ -159,6 +165,10 @@ $$\mathcal{L}_{\mathrm{data}} = \mathrm{MSE}(\hat{\mathbf{x}}, \mathbf{x}^{*}), 
 
 Here $b_k$ aggregates edge increments at vertex $k$, acting as a lightweight **graph-energy surrogate** encouraging approximate satisfaction of $\nabla\!\cdot\mathbf{u}\approx 0$.
 
+For scalar supervised pairs $(y_i,\hat{y}_i)$ aggregated over $N$ targets, we report the standard mean squared error in the usual form
+
+$$\mathrm{MSE} = \frac{1}{N}\sum_{i=1}^{N}(y_i-\hat{y}_i)^2.$$
+
 #### Visualization: Spatial Inference Comparison
 
 ![GNN Inference Comparison](./multiphysics_dec_solver/step4_hetero_gnn_training/zenn_assets/gnn_inference_comparison.png)
@@ -174,6 +184,22 @@ Here $b_k$ aggregates edge increments at vertex $k$, acting as a lightweight **g
 ### Step 5: Zero-Shot Generalization & Performance Benchmark
 
 The closing stage assesses **topological generalization** on **unseen meshes** via zero-shot inference and quantifies **return on investment (ROI)** through speedups relative to ground-truth CFD while tracking retained physical accuracy.
+
+#### Visualization: Zero-Shot Temporal Comparison (GIF)
+
+![Zero-shot temporal comparison (velocity magnitude)](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/zeroshot_comparison_animation.gif)
+
+Compared with the Step 1 cylinder-wake clip—which showcases the raw DEC trajectory—this **three-panel animation** lines up **ground-truth speed** $\|\mathbf{u}\|=\sqrt{u^2+v^2}$, the **GNN prediction**, and the **absolute error** side by side so transient structures (for example wake shedding) can be read off quickly alongside surrogate fidelity. The accompanying utility script **`multiphysics_dec_solver/step5_zero_shot_evaluation/src/generate_comparison_gif.py`** constructs the frames with **`matplotlib.animation.FuncAnimation`** and writes **`evaluation_results/zeroshot_comparison_animation.gif`** at **300 DPI**. When several Step-3 **`hetero_cylinder_wake_t*.pt`** snapshots of the **same mesh** are available, frames follow the physical time ordering; otherwise the tool falls back to an **autoregressive rollout** that feeds primal predictions back through the network while keeping dual geometric features fixed—surfacing stability rather than a multi-file timeline. Before every forward pass it validates channel widths (`data["primal"].x.size(1)`, `data["dual"].x.size(1)`) against the checkpoint and uses explicit **`assert`** guards after the dimensional checks so incompatible meshes fail predictably instead of throwing opaque shape errors mid-animation.
+
+#### Mathematical grounding
+
+The CFD targets exported from Julia satisfy viscous flow physics whose continuum momentum equation reads
+
+$$\frac{\partial u}{\partial t} + (u \cdot \nabla)u = -\frac{1}{\rho}\nabla p + \nu \nabla^2 u + f,$$
+
+with $u$ the velocity field, $p$ pressure, $\rho$ density, $\nu$ kinematic viscosity, and $f$ external forcing. Scalar reconstruction quality is summarized by
+
+$$\mathrm{MSE} = \frac{1}{N}\sum_{i=1}^{N}(y_i-\hat{y}_i)^2.$$
 
 #### Visualization: Zero-Shot Spatial Comparison
 
@@ -292,7 +318,13 @@ categorical_physics_engine/
     └── step5_zero_shot_evaluation/         # Python — ゼロショット評価・速度 / ROI チャート
         ├── requirements_step5.txt
         ├── src/
+        │   ├── evaluate_generalization.py
+        │   ├── benchmark_speed.py
+        │   └── generate_comparison_gif.py   # 時系列 GT / 予測 / 誤差 GIF
         └── evaluation_results/
+            ├── zeroshot_comparison.png
+            ├── roi_speedup_benchmark.png
+            └── zeroshot_comparison_animation.gif
 ```
 
 ## 実装ステップ詳細
@@ -391,6 +423,12 @@ $$
 
 ここで $b_k$ は **`pseudo_divergence_loss`** における頂点ごとのバランス項です。厳密なコタンジェント重み付きDECへの完全な置換ではなく、非圧縮性条件 $\nabla\!\cdot\mathbf{u}\approx 0$ に寄せるための、グラフ上のエネルギーペナルティとして機能します。
 
+教師信号をスカラー対 $(y_i,\hat{y}_i)$ として $N$ 成分にわたって集約するとき、平均二乗誤差は次の標準形で記録できます。
+
+$$
+\mathrm{MSE} = \frac{1}{N}\sum_{i=1}^{N}(y_i-\hat{y}_i)^2
+$$
+
 **離散形（コードとの対応）:** フィルタ後の **`p2p`** の辺集合を $\mathcal{E}$（向き $i\to j$）とすると、勾配項は以下のようになります。
 
 $$
@@ -418,6 +456,30 @@ $$
 ### ステップ 5: ゼロショット汎化とパフォーマンスベンチマーク
 
 構築したサロゲートモデルが、未知のメッシュに対してどの程度 **トポロジカルな汎化性能（ゼロショット推論）** を発揮するかを評価します。また、**厳密なパフォーマンスベンチマーク**を実施し、物理的な精度（MSE/MAE）を維持したまま、従来のCFDソルバーに対して **GNNサロゲートがいかに圧倒的な高速化をもたらすか**を定量化します。
+
+#### 可視化: ゼロショット時空間比較（GIF）
+
+![ゼロショット時系列比較（速度の大きさ）](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/zeroshot_comparison_animation.gif)
+
+ステップ1のシリンダー後流アニメーションが **DEC による真の時間発展** を見せるのに対し、こちらは **ゼロショット評価用メッシュ上で**、左から **グラウンドトゥルースの $\|\mathbf{u}\|=\sqrt{u^2+v^2}$**、中央 **GNN予測**、右 **絶対誤差** を並べた **1×3 のGIF** です。カルマン渦列のような時間構造が学習されているか、また自己回帰を回したときに予測が破綻しないかを、ステップ1の可視化と並べて一望できます。
+
+実装では **`multiphysics_dec_solver/step5_zero_shot_evaluation/src/generate_comparison_gif.py`** が **`matplotlib.animation.FuncAnimation`** で各フレームを描画し、**`evaluation_results/zeroshot_comparison_animation.gif`** へ **300 DPI** で書き出します。未知メッシュやチャネル設定の食い違いによる不透明な形状エラーを避けるため、推論前に **`data["primal"].x.size(1)`** と **`data["dual"].x.size(1)`** をチェックポイントの入出力次元と突き合わせ、検証後に **`assert`** で最終確認しています。同一トポロジのステップ3形式スナップショット **`hetero_cylinder_wake_t*.pt`** が複数ある場合はファイル名順に物理時刻として並べ、単一スナップショットしか無い場合は **デュアル側の幾何特徴を固定したままプライマル入力だけを自己回帰**し、安定性を可視化します。
+
+#### 数理的根拠（支配方程式と誤差指標）
+
+連続体における運動量保存（ナビエ・ストークス）は
+
+$$
+\frac{\partial u}{\partial t} + (u \cdot \nabla)u = -\frac{1}{\rho}\nabla p + \nu \nabla^2 u + f
+$$
+
+の形で表されます（$u$ は速度場、$p$ は圧力、$\rho$ は密度、$\nu$ は動粘性係数、$f$ は外力項）。スカラー予測が $N$ 点あるときの再構成誤差の要約には
+
+$$
+\mathrm{MSE} = \frac{1}{N}\sum_{i=1}^{N}(y_i-\hat{y}_i)^2
+$$
+
+を用います。
 
 #### 可視化: ゼロショット空間比較
 
