@@ -183,13 +183,27 @@ $$\mathrm{MSE} = \frac{1}{N}\sum_{i=1}^{N}(y_i-\hat{y}_i)^2.$$
 
 ### Step 5: Zero-Shot Generalization & Performance Benchmark
 
-The closing stage assesses **topological generalization** on **unseen meshes** via zero-shot inference and quantifies **return on investment (ROI)** through speedups relative to ground-truth CFD while tracking retained physical accuracy.
+The closing stage verifies **whether the surrogate generalizes physics rather than replaying memorized snapshots**: we stress **topology-changing zero-shot inference** while tracking reconstructed fields against DEC ground truth.
 
-#### Visualization: Zero-Shot Temporal Comparison (GIF)
+#### Experiment Setup
 
-![Zero-shot temporal comparison (velocity magnitude)](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/zeroshot_comparison_animation.gif)
+Our goal is to show that the network uses the **heterogeneous DEC graph**—message paths carrying Navier–Stokes–consistent discrete operators—not merely a superficial fit to one fixed animation. Training is anchored in **Step 1 channel flow past a cylindrical obstacle** (same geometry and heterogeneous contract used through Steps 2–4). For **evaluation**, we switch to an **unknown straight-channel mesh without the obstacle**: a layout **never encountered during training**, so success must arise from transferable graph physics rather than verbatim recall of cylinder-wake pixels.
 
-Compared with the Step 1 cylinder-wake clip—which showcases the raw DEC trajectory—this **three-panel animation** lines up **ground-truth speed** $\|\mathbf{u}\|=\sqrt{u^2+v^2}$, the **GNN prediction**, and the **absolute error** side by side so transient structures (for example wake shedding) can be read off quickly alongside surrogate fidelity. The accompanying utility script **`multiphysics_dec_solver/step5_zero_shot_evaluation/src/generate_comparison_gif.py`** constructs the frames with **`matplotlib.animation.FuncAnimation`** and writes **`evaluation_results/zeroshot_comparison_animation.gif`** at **300 DPI**. When several Step-3 **`hetero_cylinder_wake_t*.pt`** snapshots of the **same mesh** are available, frames follow the physical time ordering; otherwise the tool falls back to an **autoregressive rollout** that feeds primal predictions back through the network while keeping dual geometric features fixed—surfacing stability rather than a multi-file timeline. Before every forward pass it validates channel widths (`data["primal"].x.size(1)`, `data["dual"].x.size(1)`) against the checkpoint and uses explicit **`assert`** guards after the dimensional checks so incompatible meshes fail predictably instead of throwing opaque shape errors mid-animation.
+#### Visualization: Spatial Comparison on the Unseen Mesh
+
+![Zero-shot spatial comparison (velocity magnitude)](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/zeroshot_comparison.png)
+
+Scatter-style panels compare **ground truth**, **GNN prediction**, and **absolute error** for velocity magnitude on the unseen mesh—the primary readout that the surrogate survives a strict zero-shot topological shift.
+
+#### Temporal Rollout Comparison (Training Geometry vs Zero-Shot Channel)
+
+The table below aligns the Step 1 DEC training rollout with the Step 5 zero-shot animation so readers can juxtapose **data the model trained on** with **_rollout inference on unseen geometry_.**
+
+| Training data (with cylinder) | Zero-shot inference (without cylinder) |
+| :---: | :---: |
+| ![Step 1 CFD — cylinder wake (training-domain DEC)](./multiphysics_dec_solver/step1_initial_physics_def/zenn_assets/cylinder_wake_animation.gif) | ![Step 5 — zero-shot temporal comparison (velocity magnitude)](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/zeroshot_comparison_animation.gif) |
+
+The Step 5 clip is a **three-panel GIF** juxtaposing $\|\mathbf{u}\|=\sqrt{u^2+v^2}$ from ground truth, the **GNN prediction**, and **pointwise error**—useful for reading transient coherence on the unseen channel. **`multiphysics_dec_solver/step5_zero_shot_evaluation/src/generate_comparison_gif.py`** builds frames with **`matplotlib.animation.FuncAnimation`** and exports **`evaluation_results/zeroshot_comparison_animation.gif`** at **300 DPI**. When multiple Step 3 **`hetero_cylinder_wake_t*.pt`** snapshots of the **evaluation mesh** exist, frames follow chronological order; otherwise the helper falls back to an **autoregressive rollout** (primals fed back while dual geometric features remain fixed), surfacing temporal stability despite missing multi-file timelines. Each forward validates channel widths (`data["primal"].x.size(1)`, `data["dual"].x.size(1)`) against the checkpoint and raises explicit **`assert`** failures if shapes disagree, preventing opaque runtime errors mid-animation.
 
 #### Mathematical grounding
 
@@ -201,27 +215,23 @@ with $u$ the velocity field, $p$ pressure, $\rho$ density, $\nu$ kinematic visco
 
 $$\mathrm{MSE} = \frac{1}{N}\sum_{i=1}^{N}(y_i-\hat{y}_i)^2.$$
 
-#### Visualization: Zero-Shot Spatial Comparison
-
-![Zero-shot spatial comparison (velocity magnitude)](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/zeroshot_comparison.png)
-
 ### 🔬 What Is Evaluated?
 
-1. **Portable inference** — Any compatible **`.pt`** graph runs through the pretrained **`PhysicsInformedHeteroGNN`** **without architectural changes**.
-2. **Quantified accuracy** — Global **MSE** and **MAE** summarize primal-field reconstruction, complemented by localized spatial error panels.
-3. **Quantified speed (ROI)** — Repeated forward passes expose **millisecond-scale** GNN latency versus **minute-to-hour** conventional CFD solves.
-
-#### Visualization: ROI Inference Speedup Benchmark
-
-![ROI inference speedup benchmark](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/roi_speedup_benchmark.png)
-
-*(Log-scale bar chart highlighting the extreme computational speedup—ROI—offered by the HeteroGNN surrogate relative to traditional Julia/DEC CFD.)*
+1. **Portable inference** — Any compatible **`.pt`** graph instantiates **`PhysicsInformedHeteroGNN`** **without architectural surgery**, provided channel counts match the saved checkpoint.
+2. **Quantified accuracy** — Global **MSE** / **MAE** plus spatial error panels certify how faithfully the surrogate reproduces primal fields after the topological jump.
+3. **Temporal coherence** — The rollout GIF (and optional autoregressive mode) interrogates whether predicted trajectories stay stable over time once the unseen mesh replaces the cylinder wake geometry.
 
 ---
 
 ## Insights: The True ROI of Surrogate Models
 
-The “tens of thousands of times” speedup showcased in Step 5 is **more than a headline number**—it reframes design and research workflows. Adopting this surrogate pipeline yields three complementary advantages:
+![ROI inference speedup benchmark](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/roi_speedup_benchmark.png)
+
+*(Representative Julia/DEC ground-truth wall time versus HeteroGNN inference latency on a log-scale chart—here the headline **≈ 180,000×** speedup crystallizes deployment value.)*
+
+Step 5 focused on **proof of generalization**: the surrogate still reconstructs physics on a mesh it never trained on. The benchmark above translates that fidelity into operational currency—**orders-of-magnitude wall-clock savings on every exploratory query**. Treat the chart as the capstone tying rigorous accuracy gates to tangible research and engineering ROI.
+
+The “tens of thousands of times” speedup is **more than a headline number**—it reframes design and research workflows once accuracy is trustworthy. Three complementary angles capture why that matters:
 
 1. **Minimizing marginal compute cost** — Classical CFD charges a heavy solve for every parameter tweak. A trained GNN surrogate drives **marginal inference cost** down to milliseconds, making exhaustive exploration of large design spaces feasible within tight budgets.
 2. **Speed–accuracy triage** — A surrogate remains an approximation, yet it excels as a **rapid triage tool**. Engineers can evaluate thousands of candidates instantly, advancing only the top percentile to rigorous CFD validation—improving end-to-end efficiency.
@@ -494,15 +504,27 @@ $$
 
 ### ステップ 5: ゼロショット汎化とパフォーマンスベンチマーク
 
-構築したサロゲートモデルが、未知のメッシュに対してどの程度 **トポロジカルな汎化性能（ゼロショット推論）** を発揮するかを評価します。また、**厳密なパフォーマンスベンチマーク**を実施し、物理的な精度（MSE/MAE）を維持したまま、従来のCFDソルバーに対して **GNNサロゲートがいかに圧倒的な高速化をもたらすか**を定量化します。
+最終ステップでは、サロゲートが **ひとつの学習ジオメトリの「動画」を暗記しただけではないか** に対し、トポロジーが変わった未知メッシュへ **ゼロショット推論** した際に、グラウンドトゥルースに対して場がどこまで復元できるかを検証します。**速度の桁違いのROI** は、この後の考察セクションで **推論レイテンシのベンチマーク図** として結論づけます。
 
-#### 可視化: ゼロショット時系列比較（GIF）
+#### 実験概要（Experiment Setup）
 
-![ゼロショット時系列比較（速度の大きさ）](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/zeroshot_comparison_animation.gif)
+**ナビエ・ストークス系の離散グラフ構造そのものが学べているか**（画像のような見た目の再生に過ぎないか）を切り分けるため、きわめて厳しい **ゼロショット・テスト** を行います。**学習** にはステップ1の **内部に円筒（障害物）がある流路（シリンダー後流）** と、その系列で構築したヘテロコントラクトを用います。**推論の評価** では、学習中に一度も登場しない **シリンダーのないまっすぐな流路の未知メッシュ** を入力し、幾何の記憶ではなく転移可能な物理の写像だけで誤差が収まるかを見ます。
 
-ステップ1のシリンダー後流アニメーションが **DEC による真の時間発展** を見せるのに対し、こちらは **ゼロショット評価用メッシュ上で**、左から **グラウンドトゥルースの $\|\mathbf{u}\|=\sqrt{u^2+v^2}$**、中央 **GNN予測**、右 **絶対誤差** を並べた **1×3 のGIF** です。カルマン渦列のような時間構造が学習されているか、また自己回帰を回したときに予測が破綻しないかを、ステップ1の可視化と並べて一望できます。
+#### 可視化: 未知メッシュ上の空間比較
 
-実装では **`multiphysics_dec_solver/step5_zero_shot_evaluation/src/generate_comparison_gif.py`** が **`matplotlib.animation.FuncAnimation`** で各フレームを描画し、**`evaluation_results/zeroshot_comparison_animation.gif`** へ **300 DPI** で書き出します。未知メッシュやチャネル設定の食い違いによる不透明な形状エラーを避けるため、推論前に **`data["primal"].x.size(1)`** と **`data["dual"].x.size(1)`** をチェックポイントの入出力次元と突き合わせ、検証後に **`assert`** で最終確認しています。同一トポロジのステップ3形式スナップショット **`hetero_cylinder_wake_t*.pt`** が複数ある場合はファイル名順に物理時刻として並べ、単一スナップショットしか無い場合は **デュアル側の幾何特徴を固定したままプライマル入力だけを自己回帰**し、安定性を可視化します。
+![ゼロショット空間比較（速度の大きさ）](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/zeroshot_comparison.png)
+
+未知メッシュにおけるプライマル流体頂点について、速度の大きさの **グラウンドトゥルース・GNN予測・絶対誤差** を並べた散布図であり、トポロジーが変わった直後でもゼロショット再構成が破綻していないことの主要指標になります。
+
+#### 時系列ロールアウトの比較（学習データとゼロショット）
+
+下表は **学習データ側の時間発展（シリンダーあり）** と **未知の直線流路でのゼロショットGIF** を並べ、「何を見て学んだか」と「評価で何を入力したか」を一望できるようにしています。
+
+| 学習データ（シリンダーあり） | ゼロショット推論（シリンダーなし） |
+| :---: | :---: |
+| ![ステップ1 CFD — シリンダー後流（学習ドメインのDEC軌道）](./multiphysics_dec_solver/step1_initial_physics_def/zenn_assets/cylinder_wake_animation.gif) | ![ステップ5 — ゼロショット時系列比較（速度の大きさ）](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/zeroshot_comparison_animation.gif) |
+
+ステップ5のGIFは、左から **グラウンドトゥルースの $\|\mathbf{u}\|=\sqrt{u^2+v^2}$**、中央 **GNN予測**、右 **絶対誤差** を並べた **1×3 パネル** です。未知チャネル上の時間構造や、自己回帰を回したときの安定性を読む用途に適しています。実装では **`multiphysics_dec_solver/step5_zero_shot_evaluation/src/generate_comparison_gif.py`** が **`matplotlib.animation.FuncAnimation`** で各フレームを描画し、**`evaluation_results/zeroshot_comparison_animation.gif`** に **300 DPI** で出力します。**評価用メッシュ** のステップ3形式スナップショット **`hetero_cylinder_wake_t*.pt`** が複数ある場合はファイル名順に物理時刻として並べ、単一のみのときは **デュアル側の幾何特徴を固定したままプライマルを自己回帰** して安定性を可視化します。推論ごとに **`data["primal"].x.size(1)`** と **`data["dual"].x.size(1)`** をチェックポイントの次元と突き合わせ、検証後に **`assert`** で失敗させ、形状不一致を途中の不透明なエラーにしないようにしています。
 
 #### 数理的根拠（支配方程式と誤差指標）
 
@@ -520,29 +542,21 @@ $$
 
 を用います。
 
-#### 可視化: ゼロショット空間比較
-
-![ゼロショット空間比較（速度の大きさ）](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/zeroshot_comparison.png)
-
-*（注: 未知の評価用グラフに対する、プライマル流体頂点の速度の大きさの散布図（グラウンドトゥルース・予測・絶対誤差）です。）*
-
 ### 🔬 評価の対象と検証事項
 
-1. **推論の移植性** — チャネル幅が一致する **ステップ3形式の `.pt` ファイル**であれば、追加の再学習を一切行うことなく **`PhysicsInformedHeteroGNN`** で実行可能なことを確認しました。
-2. **精度の定量化** — グローバルなMSE/MAEによってプライマル場の再構成精度を要約し、空間誤差パネルによって局所的な差異の分布を可視化しました。
-3. **速度の定量化** — 何度も推論を繰り返すベンチマークにより、対話的な設計ツールや外側の最適化ループに十分に組み込める **ミリ秒クラス** の低レイテンシを記録しました。
-
-#### 可視化: ROI推論高速化（代表的ベンチマーク）
-
-![ROI 推論高速化ベンチマーク](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/roi_speedup_benchmark.png)
-
-対数スケールの棒グラフを用いて、代表的な **Julia/DEC CFD** の計算時間と、**HeteroGNNサロゲート**の推論時間（いずれも秒単位）を比較しています。
+1. **推論の移植性** — チャネル幅がチェックポイントと整合する **ステップ3形式の `.pt`** であれば、追加学習なしで **`PhysicsInformedHeteroGNN`** をそのまま通せることを確認しました。
+2. **精度の定量化** — グローバルなMSE/MAEおよび空間誤差パネルにより、未知メッシュへ移したあともプライマル場がどの程度再構成されるかを要約しました。
+3. **時系列整合性** — GIF（および自己回帰フォールバック）は、未知の直線流路において時間方向の予測が破綻せず続くかを問うチェックになります。
 
 ---
 
 ## 考察：サロゲートモデルがもたらす真のROI（投資対効果）
 
-ステップ5のベンチマークで示された「数万倍の高速化」は、単なる計算速度の向上にとどまらず、設計や研究のプロセスそのものを変革する高いROI（投資対効果）をもたらします。ここではまず試行錯誤の感触を共有し、そのうえで実務的な読み替えを3点に整理します。
+![ROI 推論高速化ベンチマーク](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/roi_speedup_benchmark.png)
+
+*（代表的な Julia/DEC グラウンドトゥルースの実行時間と、HeteroGNN 推論のレイテンシを並べた対数軸グラフ。**約18万倍** のスピードアップが、この図で「実務・研究のインパクト」として一枚に結晶化されています。）*
+
+ステップ5では **汎化（精度の証明）** に焦点を置きました。一方、実務や研究での価値は「同じ信頼性を、何度でも低コストで問い直せるか」にも宿ります。上図の対数軸ベンチマークは、代表的な **Julia/DEC グラウンドトゥルース** の壁時刻と **HeteroGNN 推論** を並べ、**約18万倍** に相当するスピードアップを一枚に要約したものです。精度のゲートを踏んだうえで初めて、この桁違いの **レイテンシ削減** が **設計探索のROI** として意味を持ちます。
 
 ### 振り返り：アーキテクチャに至るまでの迂回路
 
@@ -550,7 +564,8 @@ $$
 
 離散演算子をニューラルネット内部に隠蔽する案も検討しました。しかし、レビュアが追える形で「どのホッジマッピングを信じているか」を残すには、**JuliaでDECを明示し、PyGにはリレーションとして渡す**ほうが筋が良いと感じました。いま思えば、失敗の多くは技術選定というより **観測点の置き方（どこを契約で固定するか）** の設計ミスでした。
 
-サロゲートモデルを実務に載せる意義は、次の3つの視点で整理できます。
+上図のような「数万倍」の話題も、単なる見出し語ではありません。**ゼロショットでも物理場が追える**ことが前提になり、ワークフロー全体の試行錯誤やトリアージの仕方まで踏まえて初めて、投資対効果として読める数字になります。そのうえで、サロゲートを実務に載せる意義は次の3点に整理できます。
+
 
 1. **推論における「限界費用」の極小化**
 従来のCFDソルバーでは、形状や境界条件を1つ変更するたびに同等の重い計算コスト（時間と計算資源）が発生します。一方、一度学習を終えたGNNサロゲートは、未知のメッシュに対する推論コストがミリ秒単位、つまり計算の限界費用がほぼゼロになります。これにより、限られた予算と時間の中で数千〜数万パターンの設計空間を網羅的に探索することが現実的になります。
