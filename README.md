@@ -195,15 +195,23 @@ Our goal is to show that the network uses the **heterogeneous DEC graph**—mess
 
 Scatter-style panels compare **ground truth**, **GNN prediction**, and **absolute error** for velocity magnitude on the unseen mesh—the primary readout that the surrogate survives a strict zero-shot topological shift.
 
-#### Temporal Rollout Comparison (Training Geometry vs Zero-Shot Channel)
+#### Visualization: Zero-Shot Temporal Rollout (GIF)
 
-The table below aligns the Step 1 DEC training rollout with the Step 5 zero-shot animation so readers can juxtapose **data the model trained on** with **_rollout inference on unseen geometry_.**
+<div align="center">
 
-| Training data (with cylinder) | Zero-shot inference (without cylinder) |
-| :---: | :---: |
-| ![Step 1 CFD — cylinder wake (training-domain DEC)](./multiphysics_dec_solver/step1_initial_physics_def/zenn_assets/cylinder_wake_animation.gif) | ![Step 5 — zero-shot temporal comparison (velocity magnitude)](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/zeroshot_comparison_animation.gif) |
+![Zero-shot temporal comparison — ground truth vs prediction vs absolute error](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/zeroshot_comparison_animation.gif)
 
-The Step 5 clip is a **three-panel GIF** juxtaposing $\|\mathbf{u}\|=\sqrt{u^2+v^2}$ from ground truth, the **GNN prediction**, and **pointwise error**—useful for reading transient coherence on the unseen channel. **`multiphysics_dec_solver/step5_zero_shot_evaluation/src/generate_comparison_gif.py`** builds frames with **`matplotlib.animation.FuncAnimation`** and exports **`evaluation_results/zeroshot_comparison_animation.gif`** at **300 DPI**. When multiple Step 3 **`hetero_cylinder_wake_t*.pt`** snapshots of the **evaluation mesh** exist, frames follow chronological order; otherwise the helper falls back to an **autoregressive rollout** (primals fed back while dual geometric features remain fixed), surfacing temporal stability despite missing multi-file timelines. Each forward validates channel widths (`data["primal"].x.size(1)`, `data["dual"].x.size(1)`) against the checkpoint and raises explicit **`assert`** failures if shapes disagree, preventing opaque runtime errors mid-animation.
+</div>
+
+This **three-panel** animation lines up $\|\mathbf{u}\|=\sqrt{u^2+v^2}$ from DEC ground truth, the **surrogate prediction**, and **absolute error**, all on the **unseen straight channel** introduced in **Experiment Setup**, making transient structure visible—not only a frozen spatial snapshot.
+
+##### Analysis of Temporal Stability
+
+1. **Stability under autoregressive inference.** Rolling the dynamics forward repeats the surrogate in time through many steps, so truncation and model mismatch errors naturally compound. Nevertheless, trajectories—including those produced by **`generate_comparison_gif.py`**’s **autoregressive fallback**, which refreshes primal states while keeping dual geometric features fixed—stay **controlled**: velocities do not spike into catastrophic blow-up or physically meaningless patterns across the rollout window. Watching the cumulative error pane alongside the predicted speed field reveals whether iterative application remains trustworthy on the unseen mesh.
+
+2. **Generalizing physics, not the training silhouette.** Credibly reproducing coherent flow on a **never-seen straight channel** is difficult to reconcile with “rote replay” of cylinder-wake texture. Instead, predictions lean on graph pathways built from exported **DEC operators**—heterogeneous edges that faithfully mirror the discrete Navier–Stokes machinery used during training—so comparable dynamics emerge even when obstacle geometry disappears. Agreement in both **space** and **time** makes the GIF a qualitative certificate that physics is carried by **operator structure**, not superficial memorization of the Step 1 obstruction.
+
+Technical details: **`multiphysics_dec_solver/step5_zero_shot_evaluation/src/generate_comparison_gif.py`** fabricates frames with **`matplotlib.animation.FuncAnimation`** and writes **`evaluation_results/zeroshot_comparison_animation.gif`** at **300 DPI**. If several Step 3 **`hetero_cylinder_wake_t*.pt`** tensors for the evaluation mesh exist, clips follow chronological snapshots; otherwise the **autoregressive** path above engages. Checks on `data["primal"].x.size(1)` and `data["dual"].x.size(1)` against the checkpoint culminate in explicit **`assert`** failures when shapes mismatch, eliminating opaque mid-rollout crashes.
 
 #### Mathematical grounding
 
@@ -516,15 +524,23 @@ $$
 
 未知メッシュにおけるプライマル流体頂点について、速度の大きさの **グラウンドトゥルース・GNN予測・絶対誤差** を並べた散布図であり、トポロジーが変わった直後でもゼロショット再構成が破綻していないことの主要指標になります。
 
-#### 時系列ロールアウトの比較（学習データとゼロショット）
+#### 可視化: ゼロショット時系列ロールアウト（GIF）
 
-下表は **学習データ側の時間発展（シリンダーあり）** と **未知の直線流路でのゼロショットGIF** を並べ、「何を見て学んだか」と「評価で何を入力したか」を一望できるようにしています。
+<div align="center">
 
-| 学習データ（シリンダーあり） | ゼロショット推論（シリンダーなし） |
-| :---: | :---: |
-| ![ステップ1 CFD — シリンダー後流（学習ドメインのDEC軌道）](./multiphysics_dec_solver/step1_initial_physics_def/zenn_assets/cylinder_wake_animation.gif) | ![ステップ5 — ゼロショット時系列比較（速度の大きさ）](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/zeroshot_comparison_animation.gif) |
+![ゼロショット時系列比較 — グラウンドトゥルース／予測／絶対誤差](./multiphysics_dec_solver/step5_zero_shot_evaluation/evaluation_results/zeroshot_comparison_animation.gif)
 
-ステップ5のGIFは、左から **グラウンドトゥルースの $\|\mathbf{u}\|=\sqrt{u^2+v^2}$**、中央 **GNN予測**、右 **絶対誤差** を並べた **1×3 パネル** です。未知チャネル上の時間構造や、自己回帰を回したときの安定性を読む用途に適しています。実装では **`multiphysics_dec_solver/step5_zero_shot_evaluation/src/generate_comparison_gif.py`** が **`matplotlib.animation.FuncAnimation`** で各フレームを描画し、**`evaluation_results/zeroshot_comparison_animation.gif`** に **300 DPI** で出力します。**評価用メッシュ** のステップ3形式スナップショット **`hetero_cylinder_wake_t*.pt`** が複数ある場合はファイル名順に物理時刻として並べ、単一のみのときは **デュアル側の幾何特徴を固定したままプライマルを自己回帰** して安定性を可視化します。推論ごとに **`data["primal"].x.size(1)`** と **`data["dual"].x.size(1)`** をチェックポイントの次元と突き合わせ、検証後に **`assert`** で失敗させ、形状不一致を途中の不透明なエラーにしないようにしています。
+</div>
+
+左から **グラウンドトゥルースの $\|\mathbf{u}\|=\sqrt{u^2+v^2}$**、中央 **GNN予測**、右 **絶対誤差** を並べた **1×3 パネルのGIF** で、実験概要で述べた **未知の直線流路** 上での時間発展だけでなく、その累積的な妥当性まで一望できます。
+
+##### 時系列の安定性に関する考察（Analysis of Temporal Stability）
+
+1. **自己回帰推論の安定性。** モデルを時間方向に繰り返し適用すると、離散誤差や近似誤差はフレームをまたいで溜まっていくのが通常ですが、GIFに現れる軌道—特に複数スナップショットが無く **`generate_comparison_gif.py`** の **自己回帰フォールバック**（デュアル幾何を固定しプライマルを折り返し入力）だけで時間を進める場合—は **制御されたまま**です。ノルムや速度場が発散的に増幅せず、流れとして破綻したパターンに落ち込まないことを、速度パネルと誤差パネルの両方から読むことができます。
+
+2. **物理法則の汎化（シリンダー形状の丸暗記ではなくNSダイナミクスの学習）。** **学習時に一度も見ていない** 直線流路で時間方向まで含めて整合的な結果を維持するのは、「シリンダー後流という見た目」の再生だけでは説明が難しく、**グラフへ埋め込まれたDECオペレータ**（離散ナビエ・ストークス系に対応したメッセージ経路）に沿って物理が運ばれている状況を示唆します。空間だけでなく時間方向のギャップが抑えられること自体が、学習ドメインの障害物形状への依存よりも **方程式ダイナミクス側の転移**が効いている、という読み筋を強めます。
+
+実装については、`multiphysics_dec_solver/step5_zero_shot_evaluation/src/generate_comparison_gif.py` が **`matplotlib.animation.FuncAnimation`** で各フレームを合成し、`evaluation_results/zeroshot_comparison_animation.gif` を **300 DPI** で書き出します。**評価用メッシュ** の **`hetero_cylinder_wake_t*.pt`** が複数あればそれらを時系列として連結し、単一のみのときは上記の自己回帰を用います。推論ごとに **`data["primal"].x.size(1)`** と **`data["dual"].x.size(1)`** をチェックポイントの次元へ照合し、整合しなければ **`assert`** で停止させ、不透明な形状エラーでアニメーション途中に落ちるのを避けています。
 
 #### 数理的根拠（支配方程式と誤差指標）
 
